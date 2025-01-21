@@ -1,0 +1,464 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ------ENUMS------
+enum UserRole {
+  CUSTOMER
+  SERVICE_PROVIDER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+  FLAGGED
+  BANNED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  RESCHEDULED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  ONLINE
+  CASH_ON_DELIVERY
+  ESEWA
+  KHALTI
+  BANK_TRANSFER
+}
+
+enum VerificationStatus {
+  PENDING
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum FlagReason {
+  INAPPROPRIATE_BEHAVIOR
+  FRAUD
+  SAFETY_CONCERN
+  POLICY_VIOLATION
+  SERVICE_QUALITY
+  OTHER
+}
+
+enum DocumentType {
+  ID_PROOF
+  CERTIFICATION
+  Driving_LICENSE
+  PASSPORT
+  VOTER_ID_CARD
+  PAN_CARD
+  OTHER
+}
+
+// ------Models------
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  phone             String?   @unique
+  password          String
+  role              UserRole
+  firstName         String
+  lastName          String
+  avatar            String?
+  status            UserStatus @default(PENDING_VERIFICATION)
+  emailVerified     Boolean   @default(false)
+  phoneVerified     Boolean   @default(false)
+  address           Address[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  lastLoginAt       DateTime?
+  lastLoginIp       String?
+
+  // Role-specific relations
+  customerProfile   Customer?
+  providerProfile   ServiceProvider?
+  // adminProfile      Admin?
+
+  // Common relations
+  notifications     Notification[]
+  reviews          Review[]       @relation("ReviewAuthor")
+  receivedReviews  Review[]       @relation("ReviewReceiver")
+  messages         Message[]
+  flags            UserFlag[]
+  activityLogs     ActivityLog[]
+}
+
+model UserFlag {
+  id              String    @id @default(cuid())
+  user            User      @relation(fields: [userId], references: [id])
+  userId          String
+  reason          FlagReason
+  description     String
+  flaggedBy       String    // Admin ID who flagged
+  evidence        String?   // URL to evidence if any
+  status          UserStatus
+  createdAt       DateTime  @default(now())
+  resolvedAt      DateTime?
+  resolvedBy      String?   // Admin ID who resolved
+  resolution      String?
+}
+
+model Customer {
+  id              String    @id @default(cuid())
+  user            User      @relation(fields: [userId], references: [id])
+  userId          String    @unique
+  bookings        Booking[]
+  favoriteProviders ServiceProvider[] @relation("CustomerFavorites")
+  emergencyContact String?
+}
+
+model ServiceProvider {
+  id              String    @id @default(cuid())
+  user            User      @relation(fields: [userId], references: [id])
+  userId          String    @unique
+  bio             String?
+  experience      Int?      // Years of experience
+  businessName    String?
+  services        Service[]
+  bookings        Booking[]
+  schedules       ProviderSchedule[]
+  documents       Document[]
+  averageRating   Float?
+  totalBookings   Int       @default(0)
+  favoredBy       Customer[] @relation("CustomerFavorites")
+  categoryId      String
+  category        Category  @relation(fields: [categoryId], references: [id])
+  kycStatus       VerificationStatus @default(PENDING)
+  kycVerifiedAt   DateTime?
+  kycVerifiedBy   String?   // Admin ID
+  serviceAreas    ServiceArea[]
+  workingHours    WorkingHours[]
+  unavailableDates DateExclusion[]
+}
+
+model ServiceArea {
+  id              String    @id @default(cuid())
+  provider        ServiceProvider @relation(fields: [providerId], references: [id])
+  providerId      String
+  name            String
+  polygon         Json      // GeoJSON polygon for service area
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model WorkingHours {
+  id              String    @id @default(cuid())
+  provider        ServiceProvider @relation(fields: [providerId], references: [id])
+  providerId      String
+  dayOfWeek       Int       // 0-6 (Sunday-Saturday)
+  startTime       String    // HH:mm format
+  endTime         String    // HH:mm format
+  breakStart      String?   // HH:mm format
+  breakEnd        String?   // HH:mm format
+  isAvailable     Boolean   @default(true)
+}
+
+model DateExclusion {
+  id              String    @id @default(cuid())
+  provider        ServiceProvider @relation(fields: [providerId], references: [id])
+  providerId      String
+  startDate       DateTime
+  endDate         DateTime
+  reason          String?
+  createdAt       DateTime  @default(now())
+}
+
+model ProviderSchedule {
+  id              String    @id @default(cuid())
+  provider        ServiceProvider @relation(fields: [providerId], references: [id])
+  providerId      String
+  date            DateTime
+  slots           TimeSlot[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model TimeSlot {
+  id              String    @id @default(cuid())
+  schedule        ProviderSchedule @relation(fields: [scheduleId], references: [id])
+  scheduleId      String
+  startTime       DateTime
+  endTime         DateTime
+  isAvailable     Boolean   @default(true)
+  booking         Booking?
+}
+
+model Document {
+  id              String    @id @default(cuid())
+  provider        ServiceProvider @relation(fields: [providerId], references: [id])
+  providerId      String
+  type            DocumentType    // e.g., "ID_PROOF", "CERTIFICATION", "KYC"
+  name            String
+  url             String
+  verificationStatus VerificationStatus @default(PENDING)
+  verifiedAt      DateTime?
+  verifiedBy      String?   // Admin ID
+  rejectionReason String?
+  expiryDate      DateTime?
+  uploadedAt      DateTime  @default(now())
+  metadata        Json?     // Store additional document metadata
+}
+
+model Service {
+  id              String    @id @default(cuid())
+  name            String
+  description     String
+  price           Float
+  duration        Int       // Duration in minutes
+  images          String[]
+  isActive        Boolean   @default(true)
+  provider        ServiceProvider @relation(fields: [providerId], references: [id])
+  providerId      String
+  category        Category  @relation(fields: [categoryId], references: [id])
+  categoryId      String
+  bookings        Booking[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Booking {
+  id              String    @id @default(cuid())
+  customer        Customer  @relation(fields: [customerId], references: [id])
+  customerId      String
+  service         Service   @relation(fields: [serviceId], references: [id])
+  serviceId       String
+  provider        ServiceProvider @relation(fields: [providerId], references: [id])
+  providerId      String
+  timeSlot        TimeSlot  @relation(fields: [timeSlotId], references: [id])
+  timeSlotId      String    @unique
+  status          BookingStatus @default(PENDING)
+  scheduledDate   DateTime
+  completedDate   DateTime?
+  totalAmount     Float
+  payment         Payment?
+  review          Review?
+  notes           String?
+  location        Json      // GeoJSON point for service location
+  trackingLogs    ServiceTrackingLog[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model ServiceTrackingLog {
+  id              String    @id @default(cuid())
+  booking         Booking   @relation(fields: [bookingId], references: [id])
+  bookingId       String
+  location        Json      // GeoJSON point
+  status          BookingStatus
+  timestamp       DateTime  @default(now())
+  metadata        Json?     // Additional tracking data
+}
+
+model ActivityLog {
+  id              String    @id @default(cuid())
+  user            User      @relation(fields: [userId], references: [id])
+  userId          String
+  action          String
+  entity          String    // The model/entity being acted upon
+  entityId        String    // ID of the affected entity
+  details         Json?     // Additional details about the action
+  ipAddress       String?
+  userAgent       String?
+  createdAt       DateTime  @default(now())
+}
+
+
+model Payment {
+  id              String    @id @default(cuid())
+  booking         Booking   @relation(fields: [bookingId], references: [id])
+  bookingId       String    @unique
+  amount          Float
+  method          PaymentMethod
+  status          PaymentStatus @default(PENDING)
+  transactionId   String?   // External payment gateway transaction ID
+  paymentDate     DateTime?
+  refundAmount    Float?
+  refundReason    String?
+  refundDate      DateTime?
+  currency        String    @default("NPR")
+  taxAmount       Float?
+  serviceCharge   Float?
+  metadata        Json?     // Store payment gateway specific data
+  failureReason   String?
+  retryCount      Int       @default(0)
+  receiptUrl      String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Review {
+  id              String    @id @default(cuid())
+  booking         Booking   @relation(fields: [bookingId], references: [id])
+  bookingId       String    @unique
+  author          User      @relation("ReviewAuthor", fields: [authorId], references: [id])
+  authorId        String
+  receiver        User      @relation("ReviewReceiver", fields: [receiverId], references: [id])
+  receiverId      String
+  rating          Int       @db.SmallInt
+  comment         String?
+  reply           String?
+  images          String[]  // URLs of review images
+  helpfulCount    Int       @default(0)
+  reportCount     Int       @default(0)
+  isVerified      Boolean   @default(false)
+  isHidden        Boolean   @default(false)
+  hiddenReason    String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Category {
+  id              String    @id @default(cuid())
+  name            String
+  nameNp          String?   // Nepali translation
+  description     String?
+  descriptionNp   String?   // Nepali translation
+  icon            String?
+  image           String?
+  parentId        String?
+  parent          Category? @relation("SubCategories", fields: [parentId], references: [id])
+  subCategories   Category[] @relation("SubCategories")
+  services        Service[]
+  serviceProviders ServiceProvider[]
+  isActive        Boolean   @default(true)
+  displayOrder    Int       @default(0)
+  metadata        Json?     // Additional category specific data
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Address {
+  id              String    @id @default(cuid())
+  user            User      @relation(fields: [userId], references: [id])
+  userId          String
+  type            String    // HOME, OFFICE, OTHER
+  name            String    // Label for the address
+  street          String
+  area            String?
+  city            String
+  state           String
+  zipCode         String?
+  landmark        String?
+  location        Json      // GeoJSON point
+  isDefault       Boolean   @default(false)
+  isVerified      Boolean   @default(false)
+  metadata        Json?     // Additional address data
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Notification {
+  id              String    @id @default(cuid())
+  user            User      @relation(fields: [userId], references: [id])
+  userId          String
+  title           String
+  titleNp         String?   // Nepali translation
+  message         String
+  messageNp       String?   // Nepali translation
+  type            String    // BOOKING, PAYMENT, SYSTEM, PROMOTIONAL
+  priority        String    @default("NORMAL") // HIGH, NORMAL, LOW
+  read            Boolean   @default(false)
+  readAt          DateTime?
+  actionUrl       String?   // Deep link or web URL
+  image           String?   // Notification image URL
+  data            Json?     // Additional notification data
+  expiresAt       DateTime?
+  createdAt       DateTime  @default(now())
+}
+
+model Message {
+  id              String    @id @default(cuid())
+  sender          User      @relation(fields: [senderId], references: [id])
+  senderId        String
+  chatRoomId      String
+  chatRoom        ChatRoom  @relation(fields: [chatRoomId], references: [id])
+  content         String
+  contentType     String    @default("TEXT") // TEXT, IMAGE, LOCATION
+  read            Boolean   @default(false)
+  readAt          DateTime?
+  metadata        Json?     // Additional message data
+  createdAt       DateTime  @default(now())
+  deletedAt       DateTime?
+}
+
+model ChatRoom {
+  id              String    @id @default(cuid())
+  type            String    @default("DIRECT") // DIRECT, GROUP
+  name            String?   // For group chats
+  messages        Message[]
+  participants    ChatParticipant[]
+  lastMessageAt   DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model ChatParticipant {
+  id              String    @id @default(cuid())
+  chatRoom        ChatRoom  @relation(fields: [chatRoomId], references: [id])
+  chatRoomId      String
+  userId          String
+  role            String    @default("MEMBER") // ADMIN, MEMBER
+  joinedAt        DateTime  @default(now())
+  leftAt          DateTime?
+
+  @@unique([chatRoomId, userId])
+}
+
+model SystemConfig {
+  id              String    @id @default(cuid())
+  key             String    @unique
+  value           Json
+  description     String?
+  lastUpdatedBy   String    // Admin ID
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model PromoCode {
+  id              String    @id @default(cuid())
+  code            String    @unique
+  type            String    // PERCENTAGE, FIXED
+  value           Float
+  maxDiscount     Float?
+  startDate       DateTime
+  endDate         DateTime
+  usageLimit      Int?      // Maximum number of uses
+  usedCount       Int       @default(0)
+  minOrderAmount  Float?
+  description     String?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// Indexes for optimization
+// @@index([userId, createdAt], map: "idx_notification_user_created")
+// @@index([bookingId, status], map: "idx_payment_booking_status")
+// @@index([providerId, date], map: "idx_provider_schedule_date")
+// @@index([chatRoomId, createdAt], map: "idx_message_chatroom_created")
