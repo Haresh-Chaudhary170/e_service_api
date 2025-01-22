@@ -17,6 +17,7 @@ import MainController from './controllers/main';
 import UserController from './controllers/users';
 import AuthController from './controllers/auth';
 import CategoryController from './controllers/categories';
+import ServiceProviderController from './controllers/calendar';
 
 export const application = express();
 export let httpServer: ReturnType<typeof http.createServer>;
@@ -45,7 +46,8 @@ export const Main = async () => {
         UserController,
         AuthController,
         MainController,
-        CategoryController
+        CategoryController,
+        ServiceProviderController
     ], application);
 
     logging.log('----------------------------------------');

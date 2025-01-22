@@ -29,14 +29,14 @@ export const checkRole = (roles: string[]=[]) => {
             // Verify and decode the token
             const decoded = jwt.verify(token, JWT_SECRET) as { role: string };
 
-            // if (!roles.includes(decoded.role)) {
-            //     res.status(403).json({ error: "Access denied" });
-            //     return;
-            // }
-            if (roles.length > 0 && (!req.user || !roles.includes(req.user.role))) {
-                res.status(403).json({ error: "Insufficient permissions" });
+            if (!roles.includes(decoded.role)) {
+                res.status(403).json({ error: "Access denied" });
                 return;
             }
+            // if (roles.length > 0 && (!req.user || !roles.includes(req.user.role))) {
+            //     res.status(403).json({ error: "Insufficient permissions" });
+            //     return;
+            // }
 
             // Attach decoded information to request for further use
             req.user = decoded;

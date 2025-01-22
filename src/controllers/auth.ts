@@ -7,6 +7,9 @@ import { z } from 'zod';
 import jwt from 'jsonwebtoken';
 
 import { PrismaClient } from "@prisma/client";
+import { OtpService } from '../services/otpService';
+import { EmailService } from '../services/emailService';
+import otpEmailTemplate from '../templates/email_templates';
 const prisma = new PrismaClient();
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -16,8 +19,10 @@ const userValidationSchema = z.object({
     email: z.string().email("Invalid email format"),
     password: z.string().min(6, "Password must be at least 6 characters"),
 });
-
-@Controller('/api/users')
+const emailValidationSchema = z.object({
+    email: z.string().email("Invalid email format"),
+});
+@Controller('/api')
 class AuthController {
 
     @Route('post', '/login')
@@ -67,14 +72,14 @@ class AuthController {
         }
     }
 
-    @Route('post', '/logout') // Logout endpoint
+    @Route('post', '/logout')
     async logout(req: Request, res: Response, next: NextFunction): Promise<void> {
         try {
             // Clear the token cookie
             res.clearCookie("token", {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === "PRODUCTION", // Secure cookies in production
-                sameSite: "strict", // Prevent the cookie from being sent with cross-origin requests
+                secure: process.env.NODE_ENV === "PRODUCTION",
+                sameSite: "strict",
             });
 
             // Respond with a success message
@@ -82,6 +87,82 @@ class AuthController {
         } catch (error) {
             console.error("Error during logout:", error);
             res.status(500).json({ error: "Error logging out" });
+        }
+    }
+
+    // send otp
+    @Route('post', '/send-otp-email')
+    @Validate(emailValidationSchema)
+    async sendOtpEmail(req: Request, res: Response, next: NextFunction) {
+        const otpService = new OtpService();
+        const otp = otpService.generateOtp();
+        console.log(`Generated OTP is: ${otp}`);
+
+        const emailService = new EmailService();
+
+        try {
+            const { email } = req.body;
+
+            // Check if user exists
+            const user = await prisma.user.findUnique({ where: { email } });
+            if (!user) {
+                return res.status(400).json({ error: 'User with the provided email does not exists!' });
+            }
+            const otpType = 'EMAIL';
+
+            // Save OTP to database
+            await prisma.oTP.create({
+                data: {
+                    userId: user.id,
+                    otp: otp,
+                    type: otpType,
+                    expiresAt: new Date(Date.now() + 10 * 60 * 1000), // OTP valid for 10 minutes
+                }
+            });
+
+            const userName = user.firstName;
+            const emailSent=await emailService.sendEmail(
+                user.email,
+                'Email Verification',
+                'This email with otp is sent to you to verify your email. If this action is not initiated by you then please ignore it.',
+                otpEmailTemplate(otp, userName)
+            );
+            if (emailSent) {
+                res.status(200).json({
+                    userId: user.id,
+                    message: 'OTP sent successfully. Please check your email.'
+                })
+            } else {
+                res.status(500).json({ error: 'Error sending email' });
+                
+            }
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: 'Error sending OTP' });
+        }
+    }
+
+    // verify email
+    @Route('post', '/verify-email')
+    async verifyEmailOtp(req: Request, res: Response, next: NextFunction) {
+        const { userId, otp } = req.body;
+        const otpService = new OtpService();
+        try {
+            const isVerified = await otpService.verifyOtp(userId, otp, "EMAIL");
+            if (isVerified) {
+                // Update user's emailVerified status
+                await prisma.user.update({
+                    where: { id: userId },
+                    data: { emailVerified: true }
+                });
+                res.status(200).json({ message: 'Email verified successfully' });
+            } else {
+                res.status(400).json({ error: 'Invalid OTP or OTP expired' });
+            }
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: 'Error verifying Email.' });
+
         }
     }
 }

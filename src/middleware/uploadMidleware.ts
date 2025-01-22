@@ -5,18 +5,27 @@ import fs from 'fs';
 // Configure Multer storage
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
+        console.log(req.body)
         const { providerId, type, name } = req.body;
 
-        if (!providerId || !type) {
-            return cb(new Error('Provider ID and document type are required to determine upload path'), '');
+        if (!type) {
+            return cb(new Error('Type is required to determine upload path'), '');
         }
 
-        const uploadPath = path.join(
-            'uploads',
-            name, // Type of document (e.g., image, document, etc.)
-            providerId, // User ID
-            type // Type of uploads
-        );
+        let uploadPath =''
+        if (providerId) {
+            uploadPath = path.join(
+                'uploads',
+                name, // Type of document (e.g., image, document, etc.)
+                providerId, // User ID
+                type // Type of uploads
+            );    
+        } else {
+            uploadPath = path.join(
+                'uploads',
+                type // Type of uploads
+            );    
+        }
 
         // Ensure the directory exists
         fs.mkdir(uploadPath, { recursive: true }, (err) => {

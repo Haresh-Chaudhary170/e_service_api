@@ -15,19 +15,17 @@ const categoryValidationSchema = z.object({
   nameNp: z.string().optional(),
   description: z.string().optional(),
   descriptionNp: z.string().optional(),
-  icon: z.string().optional(),
   image: z.string().optional(),
-  parentId: z.string().optional(),
 });
 
 
 @Controller('/api/categories')
 class CategoryController {
-  @Route('get', '/get-all', checkRole(['ADMIN', 'SUPERADMIN']))
-  // @Route('get', '/get-all', checkRole(['ADMIN', 'SUPERADMIN']))
-  async getCategories(req: Request, res: Response, next: NextFunction): Promise<void> {
+  @Route('get', '/get-all-admin')
+  async getCategoriesAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const categories = await prisma.category.findMany();
+      // Get all categories sorted by displayOrder
+      const categories = await prisma.category.findMany({ orderBy: { displayOrder: 'asc' } });
       res.status(200).json(categories);
     } catch (error) {
       console.error(error);
@@ -35,14 +33,33 @@ class CategoryController {
     }
   }
 
-  @Route('post', '/add')
-  @Validate(categoryValidationSchema) // Validation on the request body
+  @Route('get', '/get-all')
+  async getCategories(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      // Get all categories where isActive is true and sorted boy displayOrder
+      const categories = await prisma.category.findMany({
+        where: { isActive: true },
+        orderBy: { displayOrder: 'asc' },
+      });
+      res.status(200).json(categories);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error fetching categories" });
+    }
+  }
+
+  @Route('post', '/add', checkRole(['ADMIN']))
+  // @Validate(categoryValidationSchema) // Validation on the request body
   async addCategory(req: Request, res: Response, next: NextFunction) {
     singleUpload(req, res, async (err) => {
       if (err) {
         return res.status(400).json({ error: err.message });
       }
-      const { name, nameNp, description, descriptionNp, icon, parentId } = req.body;
+      const { name, nameNp, description, descriptionNp, parentId } = req.body;
+      // check if name exist
+      if (!name) {
+        return res.status(400).json({ error: "Name is required" });
+      }
       const image = req.file;
 
       try {
@@ -52,7 +69,6 @@ class CategoryController {
             nameNp,
             description,
             descriptionNp,
-            icon,
             image: `${image?.destination}/${image?.filename}`,
             parentId,
           },
@@ -67,7 +83,7 @@ class CategoryController {
   }
 
   @Route('put', '/update/:id')
-  @Validate(categoryValidationSchema) // Validation on the request body
+  // @Validate(categoryValidationSchema) // Validation on the request body
   async updateCategory(req: Request, res: Response, next: NextFunction) {
     singleUpload(req, res, async (err) => {
       if (err) {
@@ -75,6 +91,10 @@ class CategoryController {
       }
       const { id } = req.params;
       const { name, nameNp, description, descriptionNp, icon, parentId } = req.body;
+      // check if name exist
+      if (!name) {
+        return res.status(400).json({ error: "Name is required" });
+      }
       const image = req.file;
 
       try {
@@ -86,7 +106,7 @@ class CategoryController {
             description,
             descriptionNp,
             icon,
-            image: image? `${image?.destination}/${image?.filename}` : null,
+            image: image && `${image?.destination}/${image?.filename}`,
             parentId,
           },
         });

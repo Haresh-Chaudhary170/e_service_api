@@ -29,8 +29,8 @@ async function main() {
             status: 'ACTIVE'
         },
         {
-            email: 'admin@example.com',
-            phone: '1122334455',
+            email: 'hareshchaudhary250@gmail.com',
+            phone: '9860689987',
             password: hashedPassword, // Replace with an actual hash
             role: 'ADMIN',
             firstName: 'Alice',

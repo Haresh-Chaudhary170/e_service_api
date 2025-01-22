@@ -74,6 +74,10 @@ enum DocumentType {
   PAN_CARD
   OTHER
 }
+enum OTPType {
+  EMAIL
+  PHONE
+}
 
 // ------Models------
 model User {
@@ -106,6 +110,7 @@ model User {
   messages         Message[]
   flags            UserFlag[]
   activityLogs     ActivityLog[]
+  otp OTP[]
 }
 
 model UserFlag {
@@ -371,6 +376,19 @@ model Address {
   metadata        Json?     // Additional address data
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+}
+
+model OTP {
+  id              String      @id @default(cuid())
+  userId          String      // Foreign key to User model
+  otp             String   // OTP value (should be a random string)
+  type            OTPType  // Email or Phone verification
+  verified        Boolean  @default(false) // Whether the OTP is verified
+  expiresAt       DateTime // OTP expiration time
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  user            User     @relation(fields: [userId], references: [id])
 }
 
 model Notification {
