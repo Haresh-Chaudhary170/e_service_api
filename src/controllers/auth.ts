@@ -5,13 +5,19 @@ import { Route } from '../decorators/route';
 import { Validate } from '../decorators/validator';
 import { z } from 'zod';
 import jwt from 'jsonwebtoken';
+import { Bitmoro } from 'bitmoro';
+
 
 import { PrismaClient } from "@prisma/client";
 import { OtpService } from '../services/otpService';
 import { EmailService } from '../services/emailService';
 import otpEmailTemplate from '../templates/email_templates';
+import { logActivity } from '../library/activityLogger';
 const prisma = new PrismaClient();
 
+type BitmoroOtpResponse = {
+    numberOfFailed: number;
+}
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "1h";
 
@@ -121,7 +127,7 @@ class AuthController {
             });
 
             const userName = user.firstName;
-            const emailSent=await emailService.sendEmail(
+            const emailSent = await emailService.sendEmail(
                 user.email,
                 'Email Verification',
                 'This email with otp is sent to you to verify your email. If this action is not initiated by you then please ignore it.',
@@ -134,7 +140,7 @@ class AuthController {
                 })
             } else {
                 res.status(500).json({ error: 'Error sending email' });
-                
+
             }
         } catch (error) {
             console.error(error);
@@ -151,10 +157,18 @@ class AuthController {
             const isVerified = await otpService.verifyOtp(userId, otp, "EMAIL");
             if (isVerified) {
                 // Update user's emailVerified status
-                await prisma.user.update({
+                const user = await prisma.user.update({
                     where: { id: userId },
                     data: { emailVerified: true }
                 });
+                await logActivity({
+                    userId,
+                    action: 'Email verified',
+                    entity: 'User',
+                    entityId: userId,
+                    details: { email: user.email },
+                    req
+                })
                 res.status(200).json({ message: 'Email verified successfully' });
             } else {
                 res.status(400).json({ error: 'Invalid OTP or OTP expired' });
@@ -162,6 +176,85 @@ class AuthController {
         } catch (error) {
             console.error(error);
             res.status(500).json({ error: 'Error verifying Email.' });
+
+        }
+    }
+
+    // send otp to phone
+    @Route('post', '/send-otp-phone')
+    // @Validate(emailValidationSchema)
+    async sendOtpPhone(req: Request, res: Response, next: NextFunction) {
+        const apiKey = process.env.BITMORO_API_KEY;
+        if (!apiKey) {
+            return res.status(500).json({ error: "BITMORO_API_KEY is not defined" });
+        }
+        const otpLength = 6;
+        const expiryTime = 10; // OTP valid for 10 minutes
+        const bitmoro = new Bitmoro(apiKey);
+        const OtpHandler = bitmoro.getOtpHandler(expiryTime, otpLength)
+        const { phone } = req.body;
+        if (!phone) {
+            return res.status(400).json({ error: 'Invalid phone number' });
+        }
+        // check if phone exist
+        const user = await prisma.user.findUnique({ where: { phone } });
+        if (!user) {
+            return res.status(400).json({ error: 'User with the provided phone number does not exists!' });
+        }
+        const otp = OtpHandler.registerOtp(user.id);
+        const otpMessage = `Your OTP for EService phone verification is ${otp.otp}`
+        const response = await OtpHandler.sendOtpMessage(phone, otpMessage, "BIT_MORE") as unknown as BitmoroOtpResponse;
+        console.log(response, user.id);
+        if (response.numberOfFailed == 0) {
+            // Save OTP to database
+            await prisma.oTP.create({
+                data: {
+                    userId: user.id,
+                    otp: otp.otp,
+                    type: 'PHONE',
+                    expiresAt: new Date(Date.now() + expiryTime * 60 * 1000),
+                }
+            });
+            res.status(200).json({
+                userId: user.id,
+                message: 'OTP sent successfully. Please check your phone.'
+            })
+        }
+        else {
+            res.status(500).json({ error: 'Error sending OTP' });
+
+        }
+
+    }
+
+    // verify phone otp
+    @Route('post', '/verify-phone')
+    async verifyPhone(req: Request, res: Response, next: NextFunction) {
+        const { userId, otp } = req.body;
+        const otpService = new OtpService();
+        try {
+            const isVerified = await otpService.verifyPhoneOtp(userId, otp);
+            if (isVerified) {
+                // Update user's phoneVerified status
+               const user = await prisma.user.update({
+                    where: { id: userId },
+                    data: { phoneVerified: true }
+                });
+                await logActivity({
+                    userId,
+                    action: 'Phone verified',
+                    entity: 'User',
+                    entityId: userId,
+                    details: { phone: user.phone },
+                    req
+                })
+                res.status(200).json({ message: 'Phone verified successfully' });
+            } else {
+                res.status(400).json({ error: 'Invalid OTP or OTP expired' });
+            }
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: 'Error verifying Phone.' });
 
         }
     }

@@ -6,6 +6,7 @@ import { z } from 'zod';  // Importing Zod
 
 import { PrismaClient } from "@prisma/client";
 import { checkRole } from '../middleware/authMiddleware';
+import { logActivity } from '../library/activityLogger';
 const prisma = new PrismaClient();
 
 
@@ -62,6 +63,14 @@ class ServiceProviderController {
                     providerId:existingProvider.id,
                 },
             });
+            await logActivity({
+                userId: req.user.id,
+                action: "Service Area Added.",
+                entity: "serviceArea",
+                entityId: serviceArea.id,
+                details: { name },
+                req,
+            })
             res.status(200).json({
                 serviceArea,
                 message: "Service area created successfully",
@@ -94,6 +103,14 @@ class ServiceProviderController {
                     providerId: existingProvider.id,
                 },
             });
+            await logActivity({
+                userId: req.user.id,
+                action: "Working Hours Added.",
+                entity: "workingHours",
+                entityId: workingHours.id,
+                details: { dayOfWeek, startTime, endTime, breakStart, breakEnd },
+                req,
+            })
             res.status(200).json({
                 workingHours,
                 message: "Working hours created successfully",
@@ -123,6 +140,14 @@ class ServiceProviderController {
                     providerId:existingProvider.id,
                 },
             });
+            await logActivity({
+                userId: req.user.id,
+                action: "Date Exclusion Added.",
+                entity: "dateExclusion",
+                entityId: dateExclusion.id,
+                details: { startDate, endDate, reason },
+                req,
+            })
             res.status(200).json({
                 dateExclusion,
                 message: "Date exclusion created successfully",
@@ -151,6 +176,14 @@ class ServiceProviderController {
                     providerId:existingProvider.id,
                 },
             });
+            await logActivity({
+                userId: req.user.id,
+                action: "Schedule Added.",
+                entity: "providerSchedule",
+                entityId: schedule.id,
+                details: { date },
+                req,
+            })
             res.status(200).json({
                 schedule,
                 message: "Schedule created successfully",
@@ -180,6 +213,14 @@ class ServiceProviderController {
                     scheduleId,
                 },
             });
+            await logActivity({
+                userId: req.user.id,
+                action: "Time Slot Added.",
+                entity: "timeSlot",
+                entityId: timeSlot.id,
+                details: { startTime, endTime, scheduleId },
+                req,
+            })
             res.status(200).json({
                 timeSlot,
                 message: "Time slot created successfully",

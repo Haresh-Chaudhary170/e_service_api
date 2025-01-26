@@ -7,7 +7,8 @@ import { z } from 'zod';  // Importing Zod
 
 import { PrismaClient } from "@prisma/client";
 import { checkRole } from '../middleware/authMiddleware';
-import { singleUpload } from '../middleware/uploadMidleware';
+import { singleUploadMiddleware } from '../middleware/uploadMidleware';
+import { logActivity } from '../library/activityLogger';
 const prisma = new PrismaClient();
 
 const userValidationSchema = z.object({
@@ -35,7 +36,7 @@ const providerValidationSchema = z.object({
 const providerDocumentSchema = z.object({
   providerId: z.string().min(1, "Service provider id required!"),
   type: z.enum(["ID_PROOF", "CERTIFICATION", "Driving_LICENSE", "PASSPORT", "VOTER_ID_CARD", "PAN_CARD", "OTHER"]),
-  name: z.string().min(1,"Name requiired"),
+  name: z.string().min(1, "Name requiired"),
   //image as file
   image: z.string(),
   metadata: z.string().optional(),
@@ -94,7 +95,14 @@ class UserController {
       const user = await prisma.user.create({
         data: { firstName, lastName, role, email, phone, password: hashedPassword },
       });
-
+      await logActivity({
+        userId: user.id,
+        action: `User Registered as ${role}`,
+        entity: 'User',
+        entityId: user.id,
+        details: { email },
+        req,
+      });
       res.status(201).json({
         user,
         message: "User created successfully",
@@ -131,6 +139,15 @@ class UserController {
       const customer = await prisma.customer.create({
         data: { userId, emergencyContact },
       });
+
+      await logActivity({
+        userId: customer.userId,
+        action: `User Registered as Customer`,
+        entity: 'Customer',
+        entityId: customer.id,
+        details: { emergencyContact },
+        req,
+      })
 
       res.status(200).json({
         customer,
@@ -169,7 +186,15 @@ class UserController {
         data: { userId, bio, experience, businessName, categoryId },
       });
 
-      res.status(201).json({
+      await logActivity({
+        userId: provider.userId,
+        action: `User Registered as Service Provider`,
+        entity: 'ServiceProvider',
+        entityId: provider.id,
+        details: { businessName },
+        req,
+      })
+      res.status(200).json({
         provider,
         message: "Service provider created successfully",
       });
@@ -180,51 +205,54 @@ class UserController {
     }
   }
 
-  @Route('post', '/upload-kyc-document')
+  @Route('post', '/upload-kyc-document', checkRole(['SERVICE_PROVIDER']), singleUploadMiddleware)
   // @Validate(providerDocumentSchema)
   async uploadProviderDocument(req: Request, res: Response, next: NextFunction) {
-    singleUpload(req, res, async (err) => {
-      if (err) {
-        return res.status(400).json({ error: err.message });
-      }
 
-      const { providerId, type, name, metadata } = req.body;
-      const image = req.file;
+    const { providerId, type, name, metadata } = req.body;
+    const image = req.file;
 
-      if (!image) {
-        return res.status(400).json({ error: 'Image is required' });
-      }
+    if (!image) {
+      return res.status(400).json({ error: 'Image is required' });
+    }
 
-      // Check if providerId exists in the provider table
-      const existingProvider = await prisma.serviceProvider.findUnique({
-        where: { id: providerId },
-      });
-
-      if (!existingProvider) {
-        return res.status(404).json({ error: 'Service provider not found' });
-      }
-
-      try {
-        // Create the provider document in the database
-        const document = await prisma.document.create({
-          data: {
-            providerId,
-            type,
-            name,
-            url: `${image.destination}/${image.filename}`, // Save the full path of the uploaded file
-            metadata,
-          },
-        });
-
-        res.status(201).json({
-          document,
-          message: 'Provider document uploaded successfully',
-        });
-      } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Error uploading provider document' });
-      }
+    // Check if providerId exists in the provider table
+    const existingProvider = await prisma.serviceProvider.findUnique({
+      where: { id: providerId },
     });
+
+    if (!existingProvider) {
+      return res.status(404).json({ error: 'Service provider not found' });
+    }
+
+    try {
+      // Create the provider document in the database
+      const document = await prisma.document.create({
+        data: {
+          providerId,
+          type,
+          name,
+          url: `${image.destination}/${image.filename}`, // Save the full path of the uploaded file
+          metadata,
+        },
+      });
+      await logActivity({
+        userId: existingProvider.userId,
+        action: `Uploaded KYC Document - ${name}`,
+        entity: 'Document',
+        entityId: document.id,
+        details: { type, name },
+        req,
+      })
+
+      res.status(200).json({
+        document,
+        message: 'Provider document uploaded successfully',
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Error uploading provider document' });
+    }
   }
 
   @Route('post', '/add-address')
@@ -243,6 +271,14 @@ class UserController {
         data: { userId, type, name, street, area, city, state, zipCode, landmark, location, metadata },
       });
 
+      await logActivity({
+        userId: existingUser.id,
+        action: `Added Address - ${name}`,
+        entity: 'Address',
+        entityId: address.id,
+        details: { type, name },
+        req,
+      })
       res.status(200).json({
         address,
         message: "Address created successfully",

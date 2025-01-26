@@ -30,6 +30,7 @@
     "dependencies": {
         "@prisma/client": "^6.2.1",
         "bcryptjs": "^2.4.3",
+        "bitmoro": "^1.0.25",
         "cookie-parser": "^1.4.7",
         "dotenv": "^16.4.4",
         "express": "^5.0.0",

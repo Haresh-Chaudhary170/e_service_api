@@ -18,6 +18,8 @@ import UserController from './controllers/users';
 import AuthController from './controllers/auth';
 import CategoryController from './controllers/categories';
 import ServiceProviderController from './controllers/calendar';
+import ServiceController from './controllers/services';
+import ActivityController from './controllers/activityLog';
 
 export const application = express();
 export let httpServer: ReturnType<typeof http.createServer>;
@@ -47,12 +49,11 @@ export const Main = async () => {
         AuthController,
         MainController,
         CategoryController,
-        ServiceProviderController
+        ServiceProviderController,
+        ServiceController,
+        ActivityController,
     ], application);
 
-    logging.log('----------------------------------------');
-    logging.log('Define Routing Error');
-    logging.log('----------------------------------------');
     application.use(routeNotFound);
 
     logging.log('----------------------------------------');

@@ -1,17 +1,12 @@
 import { PrismaClient } from '@prisma/client'; // Prisma client for DB interactions
+import { Bitmoro } from 'bitmoro';
 
 // import { SmsService } from './smsService';
 import { LogOtpGeneration } from '../decorators/logOtpGeneration';
 const prisma = new PrismaClient();
 
 export class OtpService {
-    // private smsService: SmsService;
-    private otpStorage: Record<string, string>;  // Store OTPs by phone number
-
-    constructor() {
-        // this.smsService = new SmsService();
-        this.otpStorage = {};  // Initialize in-memory OTP storage
-    }
+ 
 
     @LogOtpGeneration
     generateOtp(): string {
@@ -19,12 +14,6 @@ export class OtpService {
         return otp;
     }
 
-    async sendOtpToPhone(phoneNumber: string): Promise<void> {
-        const otp = this.generateOtp();
-        this.otpStorage[phoneNumber] = otp;  // Store OTP temporarily
-        // await this.smsService.sendOtp(phoneNumber, otp);
-        console.log(`OTP stored for ${phoneNumber}: ${otp}`);  // For testing (remove in production)
-    }
 
     // Function to verify OTP (interacts with the database, checks expiry, and verifies status)
     async verifyOtp(userId: string, otp: string, otpType: 'EMAIL' | 'PHONE'): Promise<boolean> {
@@ -64,5 +53,37 @@ export class OtpService {
         });
 
         return true;  // OTP verified successfully
+    }
+
+    // verify phone otp
+    async verifyPhoneOtp(userId: string, otp: string): Promise<boolean> {
+
+        // check if user exists
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (!user) {
+            throw new Error('User not found');
+        }
+
+        const apiKey = process.env.BITMORO_API_KEY;
+        const otpLength = 6;
+        const expiryTime = 10; // OTP valid for 10 minutes in seconds
+        const bitmoro = new Bitmoro(apiKey!);
+        const OtpHandler = bitmoro.getOtpHandler(expiryTime, otpLength)
+        const isValid = OtpHandler.verifyOtp(user.id as string, otp);
+        console.log(isValid) // true if valid, false if not
+        if (isValid) {
+
+            // change otp verified status to true
+            await prisma.oTP.update({
+                where: { id: userId },
+                data: { verified: true }
+            });
+            // delete old otp
+            // res.status(200).json({ message: 'Phone verified successfully' });
+            return true; // OTP verified successfully
+        }
+        else {
+            return false
+        }
     }
 }

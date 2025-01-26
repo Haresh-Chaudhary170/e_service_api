@@ -5,26 +5,22 @@ import fs from 'fs';
 // Configure Multer storage
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        console.log(req.body)
         const { providerId, type, name } = req.body;
 
         if (!type) {
             return cb(new Error('Type is required to determine upload path'), '');
         }
 
-        let uploadPath =''
+        let uploadPath = '';
         if (providerId) {
             uploadPath = path.join(
                 'uploads',
-                name, // Type of document (e.g., image, document, etc.)
+                name || 'default', // Default if no name is provided
                 providerId, // User ID
                 type // Type of uploads
-            );    
+            );
         } else {
-            uploadPath = path.join(
-                'uploads',
-                type // Type of uploads
-            );    
+            uploadPath = path.join('uploads', type);
         }
 
         // Ensure the directory exists
@@ -60,5 +56,5 @@ const upload = multer({
     fileFilter,
 });
 
-export const singleUpload = upload.single('image'); // Handle single file upload
-export const multipleUpload = upload.array('images', 5); // Handle multiple file uploads (max 5 files)
+export const singleUploadMiddleware = upload.single('image');
+export const multipleUploadMiddleware = upload.array('images', 5);
