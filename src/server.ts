@@ -20,6 +20,7 @@ import CategoryController from './controllers/categories';
 import ServiceProviderController from './controllers/calendar';
 import ServiceController from './controllers/services';
 import ActivityController from './controllers/activityLog';
+import CartController from './controllers/carts';
 
 export const application = express();
 export let httpServer: ReturnType<typeof http.createServer>;
@@ -52,6 +53,7 @@ export const Main = async () => {
         ServiceProviderController,
         ServiceController,
         ActivityController,
+        CartController
     ], application);
 
     application.use(routeNotFound);

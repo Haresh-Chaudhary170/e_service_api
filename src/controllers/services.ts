@@ -8,26 +8,8 @@ import { PrismaClient } from "@prisma/client";
 import { checkRole } from '../middleware/authMiddleware';
 import { multipleUploadMiddleware, singleUploadMiddleware } from '../middleware/uploadMidleware';
 import { logActivity } from '../library/activityLogger';
+import { serviceValidationSchema } from '../validators/serviceValidator';
 const prisma = new PrismaClient();
-
-const fileSchema = z.object({
-    originalname: z.string(), // Original file name
-    mimetype: z.string().refine((type) => /image\/(jpeg|png|jpg)/.test(type), {
-        message: "Only JPEG, JPG, and PNG images are allowed",
-    }), // Ensure the file is an image
-    size: z.number().max(5 * 1024 * 1024, "Image size should not exceed 5MB"), // Limit file size to 5MB
-});
-
-const serviceValidationSchema = z.object({
-    name: z.string().min(1, "Name is required"), // The name should be a non-empty string
-    description: z.string().min(1, "Description is required"), // The description should also be a non-empty string
-    price: z.string().min(1, "Price must be a positive number"), // Price should be a positive number
-    duration: z.string().min(1, "Duration must be a positive integer"), // Duration should be an integer greater than 0
-    providerId: z.string().min(1, "Provider ID is required"),
-    categoryId: z.string().min(1, "Service ID is required"), 
-});
-
-
 
 @Controller('/api/services')
 class ServiceController {
@@ -135,7 +117,7 @@ class ServiceController {
     }
 
 
-    @Route('put', '/update/:id', checkRole(['SERVICE_PROVIDER']) ,multipleUploadMiddleware) // Use the middleware here
+    @Route('put', '/update/:id', checkRole(['SERVICE_PROVIDER']), multipleUploadMiddleware) // Use the middleware here
     async updateService(req: Request, res: Response, next: NextFunction) {
         const { id } = req.params;
         const {
@@ -148,24 +130,21 @@ class ServiceController {
         } = req.body;
         const images = req.files as Express.Multer.File[];
         try {
-            let updatedImages: string[] = [];
-
-            // If there are new images, update the service with the new images
-            if (images) {
-                updatedImages = images.map((image) => `${image.destination}/${image.filename}`);
+            const data: any = {
+                name,
+                description,
+                price: parseFloat(price), // Ensure price is stored as a number
+                duration: parseInt(duration, 10), // Ensure duration is stored as an integer
+                providerId,
+                categoryId,
+            }
+            if (images && images.length > 0) {
+                data.images = images.map((image) => `${image.destination}/${image.filename}`);
             }
             // Update the service
             const updatedService = await prisma.service.update({
                 where: { id },
-                data: {
-                    name,
-                    description,
-                    price: parseFloat(price), // Ensure price is stored as a number
-                    duration: parseInt(duration, 10), // Ensure duration is stored as an integer
-                    images: updatedImages.length > 0 ? updatedImages : [],
-                    providerId,
-                    categoryId,
-                },
+                data: data,
             });
             await logActivity({
                 userId: req.user.id,
@@ -174,7 +153,6 @@ class ServiceController {
                 entityId: updatedService.id,
                 details: { updatedService },
                 req,
-
             })
             // Send success response
             res.status(200).json({

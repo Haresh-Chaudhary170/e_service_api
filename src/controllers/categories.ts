@@ -95,17 +95,20 @@ class CategoryController {
     }
 
     try {
+      const data: any = {
+        name,
+        nameNp,
+        description,
+        descriptionNp,
+        icon,
+        parentId,
+      }
+      if (image) {
+        data.image = `${image.destination}/${image.filename}`;
+      }
       const category = await prisma.category.update({
         where: { id },
-        data: {
-          name,
-          nameNp,
-          description,
-          descriptionNp,
-          icon,
-          image: image ? `${image.destination}/${image.filename}` : undefined,
-          parentId,
-        },
+        data: data,
       });
       await logActivity({
         userId: req.user.id,
