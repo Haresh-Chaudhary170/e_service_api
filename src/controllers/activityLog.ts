@@ -18,6 +18,23 @@ class ActivityController {
             res.status(500).json({ error: "Error fetching activities" });
         }
     }
+
+    // get single log
+    @Route('get', '/activity-log/:id', checkRole(['ADMIN', 'CUSTOMER', 'SERVICE_PROVIDER']))
+    async getActivityLog(req: Request, res: Response, next: NextFunction) {
+        const { id } = req.params;
+
+        try {
+            const activity = await prisma.activityLog.findUnique({ where: { id } });
+            if (!activity) {
+                return res.status(404).json({ error: "Activity not found" });
+            }
+            res.status(200).json(activity);
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: "Error fetching activity" });
+        }
+    }
 }
 
 export default ActivityController;
