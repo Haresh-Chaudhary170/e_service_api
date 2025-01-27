@@ -196,6 +196,15 @@ class BookingController {
                     location,
                 },
             });
+            // add to serviceTrackingLog
+            await prisma.serviceTrackingLog.create({
+                data: {
+                    location,
+                    bookingId: booking.id,
+                    status: "PENDING",
+                    metadata: { message: "Booking Initiated" }
+                },
+            });
             await logActivity({
                 userId: uid,
                 action: "Initiated Booking.",
@@ -244,7 +253,6 @@ class BookingController {
                     location,
                 },
             });
-
             res.status(200).json(updatedBooking);
         } catch (error) {
             console.error("Error updating booking:", error);
