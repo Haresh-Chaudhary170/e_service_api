@@ -10,12 +10,12 @@ import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
-export const checkRole = (roles: string[]=[]) => {
+export const checkRole = (roles: string[] = []) => {
     return (req: Request, res: Response, next: NextFunction): void => {
         try {
             // Check if the JWT is present in cookies
             const token = req.cookies?.token;
-
+            console.log(token)
             if (!token) {
                 res.status(401).json({ error: "Authentication required!" });
                 return;

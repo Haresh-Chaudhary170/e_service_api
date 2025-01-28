@@ -61,11 +61,12 @@ class AuthController {
 
             // Set the token as a cookie with HttpOnly, Secure, and SameSite flags
             res.cookie("token", token, {
-                httpOnly: true, // Prevent JavaScript from accessing the token
-                secure: process.env.NODE_ENV === "PRODUCTION", // Use secure cookies in production (only sent over HTTPS)
-                sameSite: "strict", // Prevent the cookie from being sent with cross-origin requests
-                maxAge: 60 * 60 * 1000, // Set expiration time for the cookie (1 hour in this case)
+                httpOnly: true,
+                secure: process.env.NODE_ENV === "PRODUCTION",
+                sameSite: "strict", // Adjust as needed
+                maxAge: 60 * 60 * 1000, // 1 hour
             });
+
 
             // Respond with a success message and user data (optional)
             return res.json({

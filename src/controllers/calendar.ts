@@ -2,8 +2,6 @@ import { Request, Response, NextFunction } from 'express';
 import { Controller } from '../decorators/controller';
 import { Route } from '../decorators/route';
 import { Validate } from '../decorators/validator';
-import { z } from 'zod';  // Importing Zod
-
 import { PrismaClient } from "@prisma/client";
 import { checkRole } from '../middleware/authMiddleware';
 import { logActivity } from '../library/activityLogger';
@@ -15,7 +13,7 @@ const prisma = new PrismaClient();
 @Controller('/api/calendar')
 class ServiceProviderController {
     // add service area
-    @Route('post', '/add-service-area',checkRole(['SERVICE_PROVIDER']))
+    @Route('post', '/add-service-area', checkRole(['SERVICE_PROVIDER']))
     @Validate(serviceAreaSchema)
     async uploadAddress(req: Request, res: Response, next: NextFunction) {
         const { name, polygon } = req.body;
@@ -29,7 +27,7 @@ class ServiceProviderController {
                 data: {
                     name,
                     polygon,
-                    providerId:existingProvider.id,
+                    providerId: existingProvider.id,
                 },
             });
             await logActivity({
@@ -106,7 +104,7 @@ class ServiceProviderController {
                     startDate,
                     endDate,
                     reason,
-                    providerId:existingProvider.id,
+                    providerId: existingProvider.id,
                 },
             });
             await logActivity({
@@ -142,7 +140,7 @@ class ServiceProviderController {
             const schedule = await prisma.providerSchedule.create({
                 data: {
                     date,
-                    providerId:existingProvider.id,
+                    providerId: existingProvider.id,
                 },
             });
             await logActivity({

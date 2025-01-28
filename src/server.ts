@@ -2,7 +2,7 @@ import http from 'http';
 import express from 'express';
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
-
+import cors from 'cors'
 import './config/logging';
 import 'reflect-metadata';
 
@@ -23,11 +23,16 @@ import ActivityController from './controllers/activityLog';
 import CartController from './controllers/carts';
 import BookingController from './controllers/bookings';
 import ReviewController from './controllers/reviews';
+import PaymentController from './controllers/payments';
 
 export const application = express();
 export let httpServer: ReturnType<typeof http.createServer>;
 application.use(bodyParser.json());
 application.use(cookieParser());
+application.use(cors({
+    origin: [process.env.FRONTEND_URL || "http://localhost:3000"],
+    credentials: true, // Allow cookies to be sent
+}));
 
 export const Main = async () => {
     logging.log('----------------------------------------');
@@ -57,7 +62,8 @@ export const Main = async () => {
         ActivityController,
         CartController,
         BookingController,
-        ReviewController
+        ReviewController,
+        PaymentController
     ], application);
 
     application.use(routeNotFound);
