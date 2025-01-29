@@ -139,7 +139,11 @@ class PaymentController {
                 retryCount: 1
             },
         });
-
+        // change status of booking
+        await prisma.booking.update({
+            where: { id: bookingId },
+            data: { status: 'IN_PROGRESS' },
+        });
         // Log activity
         await logActivity({
             userId: req.user.id,
@@ -151,6 +155,59 @@ class PaymentController {
         });
 
         return res.status(200).json({ message: 'Payment successful.' });
+    }
+    // handle cash on delivery
+    @Route('post', '/cod', checkRole(['CUSTOMER']))
+    async handleCashOnDelivery(req: Request, res: Response, next: NextFunction) {
+        const { bookingId, totalAmount } = req.body;
+
+        // Validate that all necessary fields are present
+        if (!bookingId || !totalAmount) {
+            return res.status(400).json({ error: 'Missing required fields.' });
+        }
+
+        // check if booking exists
+        const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+        if (!booking) {
+            return res.status(404).json({ error: 'Booking not found.' });
+        }
+
+        // check if booking id already in payment
+        const existingPayment = await prisma.payment.findFirst({ where: { bookingId, status: "COMPLETED" } });
+        if (existingPayment) {
+            return res.status(400).json({ error: 'Payment for this booking already completed.' });
+        }
+
+        // Check if the total amount is valid
+        if (totalAmount <= 0) {
+            return res.status(400).json({ error: 'Invalid total amount.' });
+        }
+
+        // update or insert  payment with booking id
+        const payment = await prisma.payment.create({
+            data: {
+                bookingId,
+                amount: parseFloat(totalAmount),
+                status: "PENDING" as PaymentStatus,
+                method: 'CASH_ON_DELIVERY',
+                paymentDate: new Date(),
+                retryCount: 1
+            },
+        });
+        // change status of booking
+        await prisma.booking.update({
+            where: { id: bookingId },
+            data: { status: 'IN_PROGRESS' },
+        });
+        // Log activity
+        await logActivity({
+            userId: req.user.id,
+            action: 'Order Placed with COD',
+            entity: 'payment',
+            entityId: payment.id,
+            details: { payment, bookingId },
+            req,
+        });
     }
 }
 
