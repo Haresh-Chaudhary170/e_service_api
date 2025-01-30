@@ -6,6 +6,7 @@ import { Validate } from "../decorators/validator";
 import { checkRole } from "../middleware/authMiddleware";
 import { bookingValidationSchema } from "../validators/bookingValidator";
 import { logActivity } from "../library/activityLogger";
+import { NotificationService } from "../library/notificationService";
 
 const prisma = new PrismaClient();
 
@@ -212,6 +213,13 @@ class BookingController {
                 entityId: booking.id,
                 details: booking,
             })
+            // Send notification
+            await NotificationService.createNotification({
+                userId: providerId,
+                title: "Booking Confirmed",
+                message: "Your booking has been successfully confirmed.",
+                type: "BOOKING",
+            });
             res.status(201).json(booking);
         } catch (error) {
             console.error("Error creating booking:", error);

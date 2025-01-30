@@ -24,13 +24,14 @@ import CartController from './controllers/carts';
 import BookingController from './controllers/bookings';
 import ReviewController from './controllers/reviews';
 import PaymentController from './controllers/payments';
+import NotificationController from './controllers/notifications';
 
 export const application = express();
 export let httpServer: ReturnType<typeof http.createServer>;
 application.use(bodyParser.json());
 application.use(cookieParser());
 application.use(cors({
-    origin: [process.env.FRONTEND_URL || "http://localhost:3000"],
+    origin: ["*"],
     credentials: true, // Allow cookies to be sent
 }));
 
@@ -63,7 +64,8 @@ export const Main = async () => {
         CartController,
         BookingController,
         ReviewController,
-        PaymentController
+        PaymentController,
+        NotificationController
     ], application);
 
     application.use(routeNotFound);
