@@ -195,7 +195,14 @@ class ServiceController {
         const { id } = req.params;
 
         try {
-            const service = await prisma.service.findUnique({ where: { id } });
+            const service = await prisma.service.findUnique({
+                where: { id },
+                include:{
+                    provider: true,
+                    category: true,
+                    bookings: true
+                }
+            });
             res.status(200).json(service);
         } catch (error) {
             console.error(error);
