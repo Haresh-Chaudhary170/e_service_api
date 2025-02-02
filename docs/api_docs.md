@@ -1,6 +1,6 @@
 # **Service Booking System API Documentation**
 
-**Base URL:** `https://api.example.com/v1`
+**Base URL:** `http://localhost:8000`
 
 ---
 
@@ -326,42 +326,6 @@
 
 ### **3.1 Add category**
 
-**Endpoint:** `GET /api/categories/add`  
-**Description:** Adds category.  
-**Request Body:**
-
-```json
-{
-    "type": "categories",
-    "name": "Plumbing",
-    "description": "bla bla bla",
-    "parentId": "null (optional)",
-    "image": "image.png"
-}
-```
-
-**Response:** `201 OK`
-
-```json
-{
-    "id": "cm6kht41l000000j7143oc7hw",
-    "name": "Plumbing",
-    "nameNp": null,
-    "description": "bla bla bla",
-    "descriptionNp": null,
-    "icon": null,
-    "image": "uploads/categories/1738311539065-759035963.png",
-    "parentId": null,
-    "isActive": true,
-    "displayOrder": 0,
-    "metadata": null,
-    "createdAt": "2025-01-31T08:18:59.385Z",
-    "updatedAt": "2025-01-31T08:18:59.385Z"
-}
-```
-
-### **3.1 Add category**
-
 **Endpoint:** `POST /api/categories/add`  
 **Description:** Adds category.  
 **Request Body:**
@@ -398,7 +362,7 @@
 
 ### **3.2 Update category**
 
-**Endpoint:** `POST /api/categories/update/cm6kht41l000000j7143oc7hw`  
+**Endpoint:** `PUT /api/categories/update/cm6kht41l000000j7143oc7hw`  
 **Description:** updates category.  
 **Request Body:**
 
@@ -434,7 +398,7 @@
 
 ### **3.3 Get all categories for frontend**
 
-**Endpoint:** `POST /api/categories/get-all`  
+**Endpoint:** `GET /api/categories/get-all`  
 **Description:** Gets all category.
 
 **Response:** `200 OK`
@@ -476,7 +440,7 @@
 
 ### **3.4 Get all categories for admin**
 
-**Endpoint:** `POST /api/categories/get-all-admin`  
+**Endpoint:** `GET /api/categories/get-all-admin`  
 **Description:** Gets all category.  
 **Response:** `200 OK`
 
@@ -517,7 +481,7 @@
 
 ### **3.5 Get single category**
 
-**Endpoint:** `POST /api/categories/get-single/cm6kht41l000000j7143oc7hw`  
+**Endpoint:** `GET /api/categories/get-single/cm6kht41l000000j7143oc7hw`  
 **Description:** Gets single category.  
 **Response:** `200 OK`
 
@@ -620,7 +584,9 @@
 
 ### **4.3 Get All Services (Admin)**
 
-**Endpoint:** `GET /api/services/get-all-admin` **Description:** Retrieves a list of all available services for admin. **Response:** `200 OK`
+**Endpoint:** `GET /api/services/get-all-admin` 
+**Description:** Retrieves a list of all available services for admin. 
+**Response:** `200 OK`
 
 ```json
 [
@@ -655,7 +621,9 @@
 
 ### **4.4 Get All Services (Frontend)**
 
-**Endpoint:** `GET /api/services/get-all` **Description:** Retrieves a list of all available services for frontend. **Response:** `200 OK`
+**Endpoint:** `GET /api/services/get-all` 
+**Description:** Retrieves a list of all available services for frontend. 
+**Response:** `200 OK`
 
 ```json
 [
@@ -690,7 +658,9 @@
 
 ### **4.5 Get Single Service**
 
-**Endpoint:** `GET /api/services/get-single/[service_id]` **Description:** Retrieves service by service id. **Response:** `200 OK`
+**Endpoint:** `GET /api/services/get-single/[service_id]` 
+**Description:** Retrieves service by service id. 
+**Response:** `200 OK`
 
 ```json
 {
@@ -739,8 +709,9 @@
 
 ### **4.6 Get Services By Category**
 
-**Endpoint:** `GET /api/services//category/[category_id]` **Description:** Retrieves a list of all available services for frontend. **Response:**
-`200 OK`
+**Endpoint:** `GET /api/services//category/[category_id]` 
+**Description:** Retrieves a list of all available services for frontend. 
+**Response:** `200 OK`
 
 ```json
 [
@@ -762,8 +733,9 @@
 
 ### **4.7 Get Services By Provider**
 
-**Endpoint:** `GET /api/services/get-by-provider/[providerId]` **Description:** Retrieves a list of all available services for frontend. **Response:**
-`200 OK`
+**Endpoint:** `GET /api/services/get-by-provider/[providerId]` 
+**Description:** Retrieves a list of all available services for frontend. 
+**Response:**`200 OK`
 
 ```json
 [
@@ -789,7 +761,8 @@
 
 ### **5.1 Add to Cart**
 
-**Endpoint:** `POST /api/carts/add` **Description:** Allows a user to add service to cart.
+**Endpoint:** `POST /api/carts/add` 
+**Description:** Allows a user to add service to cart.
 
 **Request Body:**
 
@@ -799,7 +772,6 @@
     "quantity": "1"
 }
 ```
-
 **Response:** `200 Created`
 
 ```json
@@ -818,7 +790,7 @@
 
 ### **5.2 View Carts**
 
-**Endpoint:** `POST /api/carts/get` 
+**Endpoint:** `GET /api/carts/get` 
 **Description:** Allows a user to view carts.
 
 **Response:** `200 Created`
@@ -838,7 +810,7 @@
 
 ### **5.3 Edit Cart quantity**
 
-**Endpoint:** `POST /api/carts/update/[cartId]` 
+**Endpoint:** `PUT /api/carts/update/[cartId]` 
 **Description:** Allows a user to update to cart quantity.
 
 **Request Body:**
@@ -867,10 +839,10 @@
 
 ### **5.4 Delete Cart**
 
-**Endpoint:** `POST /api/carts/delete/[cartId]` 
+**Endpoint:** `DELETE /api/carts/delete/[cartId]` 
 **Description:** Allows a user to delete cart.
 
-**Response:** `200 Updated`
+**Response:** `200 Deleted`
 
 ```json
 {
@@ -1414,7 +1386,7 @@
 
 ### **9.4 Verify Reviews (Only Service Provider or Admin)**
 
-**Endpoint:** `put /api/reviews/verify/[reviewID]` 
+**Endpoint:** `PUT /api/reviews/verify/[reviewID]` 
 **Description:**  verifies the review.
 **Response:** `200 OK`
 
@@ -1442,7 +1414,7 @@
 
 ### **9. Hide/show Reviews (Only Service Provider or Admin)**
 
-**Endpoint:** `put /api/hide/verify/[reviewID]` 
+**Endpoint:** `PUT /api/hide/verify/[reviewID]` 
 **Description:**  hide/show the review.
 **Response:** `200 OK`
 
