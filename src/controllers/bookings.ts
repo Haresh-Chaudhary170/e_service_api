@@ -215,12 +215,12 @@ class BookingController {
             })
             // Send notification
             await NotificationService.createNotification({
-                userId: providerId,
+                userId: req.user.id,
                 title: "Booking Confirmed",
                 message: "Your booking has been successfully confirmed.",
                 type: "BOOKING",
             });
-            res.status(201).json(booking);
+            res.status(200).json(booking);
         } catch (error) {
             console.error("Error creating booking:", error);
             res.status(500).json({ error: "Error creating booking" });

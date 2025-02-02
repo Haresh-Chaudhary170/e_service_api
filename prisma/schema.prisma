@@ -321,7 +321,7 @@ model Payment {
 model Review {
   id           String   @id @default(cuid())
   service      Service  @relation(fields: [serviceId], references: [id])
-  serviceId    String   @unique
+  serviceId    String   
   author       User     @relation("ReviewAuthor", fields: [authorId], references: [id])
   authorId     String
  

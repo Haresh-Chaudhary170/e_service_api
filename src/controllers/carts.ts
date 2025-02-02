@@ -51,7 +51,7 @@ class CartController {
 
     @Route('post', '/add', checkRole(['CUSTOMER']))
     async addToCart(req: Request, res: Response, next: NextFunction) {
-        const { serviceId, userId, quantity } = req.body;
+        const { serviceId, quantity } = req.body;
         // check if the quantity is non nagative
         if (quantity < 1) {
             return res.status(400).json({ error: "Quantity should not be less than 1" });
@@ -59,23 +59,23 @@ class CartController {
         try {
             const existingCartItem = await prisma.cart.findFirst({
                 where: {
-                    userId: userId,
+                    userId: req.user.id,
                     serviceId: serviceId,
                 },
             });
 
             if (existingCartItem) {
-                res.status(201).json({
+                res.status(200).json({
                     message: "Service already in cart",
                     cart: existingCartItem,
                 })
             } else {
-                await prisma.cart.create({
-                    data: { userId, serviceId, quantity:parseInt(quantity) },
+                const cartItem = await prisma.cart.create({
+                    data: { userId:req.user.id, serviceId, quantity: parseInt(quantity) },
                 });
-            }
 
-            res.status(200).json({ message: "Service added to cart" });
+                res.status(200).json({ cartItem, message: "Service added to cart" });
+            }
 
         } catch (error) {
             console.log(error);

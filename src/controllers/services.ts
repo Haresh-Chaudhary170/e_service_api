@@ -189,6 +189,26 @@ class ServiceController {
         }
     }
 
+    // get services by provider
+    @Route('get', '/get-by-provider/:providerId')
+    async getServicesByProvider(req: Request, res: Response, next: NextFunction) {
+        const { providerId } = req.params;
+
+        try {
+            const services = await prisma.service.findMany({
+                where: { providerId },
+                include:{
+                    provider: true,
+                    category: true,
+                    bookings: true
+                }
+            });
+            res.status(200).json(services);
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: "Error fetching services" });
+        }
+    }
     // get single service
     @Route('get', '/get-single/:id')
     async getSingleService(req: Request, res: Response, next: NextFunction) {

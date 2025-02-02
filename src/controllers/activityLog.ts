@@ -11,7 +11,7 @@ class ActivityController {
     @Route('get', '/activity-log', checkRole(['ADMIN', 'CUSTOMER', 'SERVICE_PROVIDER']))
     async getCategoriesAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
         try {
-            const activities = await prisma.activityLog.findMany({ orderBy: { createdAt: 'desc' } });
+            const activities = await prisma.activityLog.findMany({ where: { userId: req.user.id }, orderBy: { createdAt: 'desc' } });
             res.status(200).json(activities);
         } catch (error) {
             console.error(error);
