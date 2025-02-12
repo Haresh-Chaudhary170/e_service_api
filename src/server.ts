@@ -31,7 +31,7 @@ export let httpServer: ReturnType<typeof http.createServer>;
 application.use(bodyParser.json());
 application.use(cookieParser());
 application.use(cors({
-    origin: ["*"],
+    origin: ["*","http://localhost:3000"],
     credentials: true, // Allow cookies to be sent
 }));
 
