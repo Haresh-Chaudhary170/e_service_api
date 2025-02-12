@@ -30,7 +30,7 @@ export const application = express();
 export let httpServer: ReturnType<typeof http.createServer>;
 application.use(bodyParser.json());
 application.use(cookieParser());
-const allowedOrigins = ['http://localhost:3000', 'https://example.com'];
+const allowedOrigins = ['http://localhost:3000'];
 
 application.use(cors({
     origin: function (origin, callback) {

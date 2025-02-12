@@ -40,9 +40,17 @@ const notifications_1 = __importDefault(require("./controllers/notifications"));
 exports.application = (0, express_1.default)();
 exports.application.use(body_parser_1.default.json());
 exports.application.use((0, cookie_parser_1.default)());
+const allowedOrigins = ['http://localhost:3000'];
 exports.application.use((0, cors_1.default)({
-    origin: ["*"],
-    credentials: true, // Allow cookies to be sent
+    origin: function (origin, callback) {
+        if ((typeof origin === 'string' && allowedOrigins.indexOf(origin) !== -1) || !origin) {
+            callback(null, true);
+        }
+        else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
 }));
 const Main = () => __awaiter(void 0, void 0, void 0, function* () {
     logging.log('----------------------------------------');
