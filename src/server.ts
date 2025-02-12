@@ -30,10 +30,19 @@ export const application = express();
 export let httpServer: ReturnType<typeof http.createServer>;
 application.use(bodyParser.json());
 application.use(cookieParser());
+const allowedOrigins = ['http://localhost:3000', 'https://example.com'];
+
 application.use(cors({
-    origin: ["*","http://localhost:3000"],
-    credentials: true, // Allow cookies to be sent
+    origin: function (origin, callback) {
+        if ((typeof origin === 'string' && allowedOrigins.indexOf(origin) !== -1) || !origin) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
 }));
+
 
 export const Main = async () => {
     logging.log('----------------------------------------');
