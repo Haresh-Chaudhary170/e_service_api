@@ -42,15 +42,8 @@ exports.application.use(body_parser_1.default.json());
 exports.application.use((0, cookie_parser_1.default)());
 const allowedOrigins = ['http://localhost:3000'];
 exports.application.use((0, cors_1.default)({
-    origin: function (origin, callback) {
-        if ((typeof origin === 'string' && allowedOrigins.indexOf(origin) !== -1) || !origin) {
-            callback(null, true);
-        }
-        else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    credentials: true,
+    origin: ["http://localhost:3000"],
+    credentials: true, // Allow cookies to be sent
 }));
 const Main = () => __awaiter(void 0, void 0, void 0, function* () {
     logging.log('----------------------------------------');
