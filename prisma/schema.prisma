@@ -67,8 +67,7 @@ enum FlagReason {
 
 enum DocumentType {
   ID_PROOF
-  CERTIFICATION
-  Driving_LICENSE
+  DRIVING_LICENSE
   PASSPORT
   VOTER_ID_CARD
   PAN_CARD
@@ -105,13 +104,13 @@ model User {
   // adminProfile      Admin?
 
   // Common relations
-  notifications   Notification[]
-  reviews         Review[]       @relation("ReviewAuthor")
-  messages        Message[]
-  flags           UserFlag[]
-  activityLogs    ActivityLog[]
-  otp             OTP[]
-  carts           Cart[]
+  notifications Notification[]
+  reviews       Review[]       @relation("ReviewAuthor")
+  messages      Message[]
+  flags         UserFlag[]
+  activityLogs  ActivityLog[]
+  otp           OTP[]
+  carts         Cart[]
 }
 
 model UserFlag {
@@ -160,6 +159,7 @@ model ServiceProvider {
   serviceAreas     ServiceArea[]
   workingHours     WorkingHours[]
   unavailableDates DateExclusion[]
+  certification    Certification[]
 }
 
 model ServiceArea {
@@ -229,6 +229,21 @@ model Document {
   expiryDate         DateTime?
   uploadedAt         DateTime           @default(now())
   metadata           Json? // Store additional document metadata
+}
+
+model Certification {
+  id                  String             @id @default(cuid())
+  provider            ServiceProvider    @relation(fields: [providerId], references: [id])
+  providerId          String
+  title               String
+  issuingOrganization String
+  url                 String
+  verificationStatus  VerificationStatus @default(PENDING)
+  verifiedAt          DateTime?
+  verifiedBy          String? // Admin ID
+  rejectionReason     String?
+  expiryDate          DateTime?
+  uploadedAt          DateTime           @default(now())
 }
 
 model Service {
@@ -319,12 +334,12 @@ model Payment {
 }
 
 model Review {
-  id           String   @id @default(cuid())
-  service      Service  @relation(fields: [serviceId], references: [id])
-  serviceId    String   
-  author       User     @relation("ReviewAuthor", fields: [authorId], references: [id])
-  authorId     String
- 
+  id        String  @id @default(cuid())
+  service   Service @relation(fields: [serviceId], references: [id])
+  serviceId String
+  author    User    @relation("ReviewAuthor", fields: [authorId], references: [id])
+  authorId  String
+
   rating       Int      @db.SmallInt
   comment      String?
   reply        String?

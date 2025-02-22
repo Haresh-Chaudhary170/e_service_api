@@ -5,7 +5,7 @@ import { Route } from '../decorators/route';
 import { Validate } from '../decorators/validator';
 import { PrismaClient } from "@prisma/client";
 import { checkRole } from '../middleware/authMiddleware';
-import { singleUploadMiddleware } from '../middleware/uploadMidleware';
+import { multipleUploadMiddleware, singleUploadMiddleware } from '../middleware/uploadMidleware';
 import { logActivity } from '../library/activityLogger';
 import { addressSchema, customerValidationSchema, providerValidationSchema, userValidationSchema } from '../validators/userValidator';
 const prisma = new PrismaClient();
@@ -49,6 +49,14 @@ class UserController {
       // Create the user in the database
       const user = await prisma.user.create({
         data: { firstName, lastName, role, email, phone, password: hashedPassword },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          email: true,
+          phone: true,
+        }
       });
       await logActivity({
         userId: user.id,
@@ -160,15 +168,13 @@ class UserController {
     }
   }
 
-  @Route('post', '/upload-kyc-document', checkRole(['SERVICE_PROVIDER']), singleUploadMiddleware)
-  // @Validate(providerDocumentSchema)
-  async uploadProviderDocument(req: Request, res: Response, next: NextFunction) {
+  @Route('post', '/upload-kyc-certifications', multipleUploadMiddleware)
+  async uploadKycAndCertifications(req: Request, res: Response, next: NextFunction) {
+    const { providerId, type, name, certifications } = req.body;
+    const files = req.files as Express.Multer.File[];
 
-    const { providerId, type, name, metadata } = req.body;
-    const image = req.file;
-
-    if (!image) {
-      return res.status(400).json({ error: 'Image is required' });
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'At least one image is required' });
     }
 
     // Check if providerId exists in the provider table
@@ -181,34 +187,58 @@ class UserController {
     }
 
     try {
-      // Create the provider document in the database
-      const document = await prisma.document.create({
+      // Process KYC Document (First File)
+      const kycDocument = await prisma.document.create({
         data: {
           providerId,
           type,
           name,
-          url: `${image.destination}/${image.filename}`, // Save the full path of the uploaded file
-          metadata,
+          url: `${files[0].destination}/${files[0].filename}`,
         },
       });
+
       await logActivity({
         userId: existingProvider.userId,
         action: `Uploaded KYC Document - ${name}`,
         entity: 'Document',
-        entityId: document.id,
+        entityId: kycDocument.id,
         details: { type, name },
         req,
-      })
+      });
+
+      // Process Certifications (Remaining Files)
+      const certificationDocs = [];
+      if (certifications && Array.isArray(certifications)) {
+        for (let i = 0; i < certifications.length; i++) {
+          const cert = certifications[i];
+          const file = files[i + 1]; // Skip the first file since it's for KYC
+
+          if (!file) continue;
+
+          const certDoc = await prisma.certification.create({
+            data: {
+              providerId,
+              title: cert.title,
+              issuingOrganization: cert.issuingOrganization,
+              url: `${file.destination}/${file.filename}`,
+            },
+          });
+
+          certificationDocs.push(certDoc);
+        }
+      }
 
       res.status(200).json({
-        document,
-        message: 'Provider document uploaded successfully',
+        kycDocument,
+        certifications: certificationDocs,
+        message: 'KYC and Certifications uploaded successfully',
       });
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: 'Error uploading provider document' });
+      res.status(500).json({ error: 'Error uploading KYC and certifications' });
     }
   }
+
 
   @Route('post', '/add-address')
   @Validate(addressSchema)

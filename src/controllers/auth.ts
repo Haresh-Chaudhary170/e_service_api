@@ -71,7 +71,7 @@ class AuthController {
             // Respond with a success message and user data (optional)
             return res.json({
                 message: "Login successful",
-                user: { id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email, role: user.role },
+                user: {firstName: user.firstName, lastName: user.lastName, email: user.email, role: user.role },
             });
 
         } catch (error) {

@@ -33,7 +33,7 @@ application.use(cookieParser());
 const allowedOrigins = ['http://localhost:3000'];
 
 application.use(cors({
-    origin: ["http://localhost:3000"],
+    origin: "http://localhost:3000",
     credentials: true, // Allow cookies to be sent
 }));
 

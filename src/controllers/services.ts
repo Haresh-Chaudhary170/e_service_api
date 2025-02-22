@@ -13,17 +13,17 @@ const prisma = new PrismaClient();
 
 @Controller('/api/services')
 class ServiceController {
-    @Route('get', '/get-all-admin')
-    async getServicesAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
-        try {
-            // Get all services sorted 
-            const services = await prisma.service.findMany({ orderBy: { createdAt: 'desc' } });
-            res.status(200).json(services);
-        } catch (error) {
-            console.error(error);
-            res.status(500).json({ error: "Error fetching services" });
-        }
-    }
+    // @Route('get', '/get-all-admin')
+    // async getServicesAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
+    //     try {
+    //         // Get all services sorted 
+    //         const services = await prisma.service.findMany({ orderBy: { createdAt: 'desc' } });
+    //         res.status(200).json(services);
+    //     } catch (error) {
+    //         console.error(error);
+    //         res.status(500).json({ error: "Error fetching services" });
+    //     }
+    // }
 
     @Route('get', '/get-all')
     async getServices(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -33,10 +33,59 @@ class ServiceController {
                 where: { isActive: true },
                 orderBy: { createdAt: 'desc' },
             });
-            res.status(200).json(services);
+            // total services
+            const total_services = await prisma.service.count();
+            res.status(200).json({ services, total_services });
         } catch (error) {
             console.error(error);
             res.status(500).json({ error: "Error fetching services" });
+        }
+    }
+    @Route('get', '/get-all-admin')
+    async getServicesAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const { search, categories, limit = 10, page = 1 } = req.query;
+
+            // Building filters dynamically based on the query params
+            const where: any = {
+                isActive: true,  // Keep only active services
+            };
+
+            // If 'search' query parameter exists, add a search filter
+            if (search) {
+                where.name = {
+                    contains: search as string,
+                    mode: 'insensitive',  // Case insensitive search
+                };
+            }
+
+            // If 'categories' query parameter exists, filter by category
+            if (categories) {
+                where.category = {
+                    in: (categories as string).split(','),  // Assuming categories is a comma-separated list
+                };
+            }
+
+            // Get services with pagination (limit and page)
+            const services = await prisma.service.findMany({
+                where,
+                skip: (parseInt(page as string) - 1) * parseInt(limit as string), // Pagination
+                take: parseInt(limit as string), // Limit the number of results
+                orderBy: { createdAt: 'desc' }, // Order by most recent first
+                include: {
+                    category: true,
+                }
+            });
+
+            // Count total active services matching the filters
+            const total_services = await prisma.service.count({
+                where,
+            });
+
+            res.status(200).json({ services, total_services });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: 'Error fetching services' });
         }
     }
 
