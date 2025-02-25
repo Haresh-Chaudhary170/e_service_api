@@ -25,6 +25,7 @@ import BookingController from './controllers/bookings';
 import ReviewController from './controllers/reviews';
 import PaymentController from './controllers/payments';
 import NotificationController from './controllers/notifications';
+import path from 'path';
 
 export const application = express();
 export let httpServer: ReturnType<typeof http.createServer>;
@@ -36,6 +37,8 @@ application.use(cors({
     origin: "http://localhost:3000",
     credentials: true, // Allow cookies to be sent
 }));
+const uploadsDirectory = path.resolve(__dirname, '../uploads');  // Relative to the src folder
+application.use('/uploads', express.static(uploadsDirectory));
 
 
 export const Main = async () => {

@@ -2,8 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { Controller } from '../decorators/controller';
 import { Route } from '../decorators/route';
 import { Validate } from '../decorators/validator';
-import { z } from 'zod';  // Importing Zod
-
+import fs from 'fs';
+import path from 'path';
 import { PrismaClient } from "@prisma/client";
 import { checkRole } from '../middleware/authMiddleware';
 import { multipleUploadMiddleware, singleUploadMiddleware } from '../middleware/uploadMidleware';
@@ -97,7 +97,6 @@ class ServiceController {
             description,
             price,
             duration,
-            providerId,
             categoryId,
         } = req.body;
 
@@ -141,7 +140,7 @@ class ServiceController {
                     duration: parseInt(duration, 10), // Ensure duration is stored as an integer
                     isActive: true,
                     images: images ? images.map((image) => `${image.destination}/${image.filename}`) : [],
-                    providerId,
+                    providerId: req.user.providerId,
                     categoryId,
                 },
             });
@@ -174,21 +173,27 @@ class ServiceController {
             description,
             price,
             duration,
-            providerId,
             categoryId,
         } = req.body;
         const images = req.files as Express.Multer.File[];
         try {
+            const service = await prisma.service.findUnique({ where: { id } })
+            if (!service) {
+                return res.status(404).json({ error: "Service not found" });
+            }
+
             const data: any = {
                 name,
                 description,
                 price: parseFloat(price), // Ensure price is stored as a number
                 duration: parseInt(duration, 10), // Ensure duration is stored as an integer
-                providerId,
+                providerId: req.user.providerId,
                 categoryId,
             }
+            // get the images in array
+            const oldImages = service.images
             if (images && images.length > 0) {
-                data.images = images.map((image) => `${image.destination}/${image.filename}`);
+                data.images = [...oldImages, ...images.map((image) => `${image.destination}/${image.filename}`)];
             }
             // Update the service
             const updatedService = await prisma.service.update({
@@ -222,6 +227,19 @@ class ServiceController {
         const { id } = req.params;
 
         try {
+            const service = await prisma.service.findUnique({ where: { id } });
+            if (!service) {
+                return res.status(404).json({ error: "Service not found" });
+            }
+            // Delete the service with its images
+            // const imagePaths = service.images.map((image) => image.replace(`${process.env.UPLOAD_PATH}/`, ''));
+            for (const imagePath of service.images) {
+                const filePath = path.join(__dirname, '../../', imagePath);
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            }
+            // Delete the service
             await prisma.service.delete({ where: { id } });
             await logActivity({
                 userId: req.user.id,
@@ -246,7 +264,7 @@ class ServiceController {
         try {
             const services = await prisma.service.findMany({
                 where: { providerId },
-                include:{
+                include: {
                     provider: true,
                     category: true,
                     bookings: true
@@ -266,7 +284,7 @@ class ServiceController {
         try {
             const service = await prisma.service.findUnique({
                 where: { id },
-                include:{
+                include: {
                     provider: true,
                     category: true,
                     bookings: true
@@ -278,6 +296,54 @@ class ServiceController {
             res.status(500).json({ error: "Error fetching service" });
         }
     }
+
+    // delete service image
+    @Route('post', '/delete-image')
+    async deleteServiceImage(req: Request, res: Response, next: NextFunction) {
+        const { serviceId, imageName } = req.body;
+
+        try {
+            const service = await prisma.service.findUnique({
+                where: { id: serviceId },
+                select: { images: true }
+            });
+
+            if (!service) {
+                return res.status(404).json({ error: "Service not found" });
+            }
+
+            const imagePath = service.images.find((image: string) => image.includes(imageName));
+
+            if (!imagePath) {
+                return res.status(404).json({ error: "Image not found" });
+            }
+
+            // Check if there's only one image left
+            if (service.images.length === 1) {
+                return res.status(400).json({ error: "Cannot delete the last image" });
+            }
+
+            // Delete the image from the images array
+            const updatedImages = service.images.filter((image: string) => !image.includes(imageName));
+
+            // Update the service record in the database
+            await prisma.service.update({
+                where: { id: serviceId },
+                data: { images: updatedImages }
+            });
+
+            const filePath = path.join(__dirname, '../../', imagePath);
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath); // Deletes the file
+            }
+
+            res.status(200).json({ message: "Service image deleted successfully" });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: "Error deleting service image" });
+        }
+    }
+
 
 }
 

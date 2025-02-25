@@ -35,6 +35,9 @@ class AuthController {
     @Validate(userValidationSchema) // Validation on the request body
     async login(req: Request, res: Response, next: NextFunction) {
         const { email, password } = req.body;
+        let customerId = null;
+        let providerId = null;
+
 
         try {
             // Check if the user exists
@@ -55,7 +58,15 @@ class AuthController {
             if (!JWT_SECRET) {
                 return res.status(500).json({ error: "JWT_SECRET is not defined" });
             }
-            const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, JWT_SECRET, {
+            if (user.role === "CUSTOMER") {
+                const customer = await prisma.customer.findUnique({ where: { userId: user.id } });
+                customerId = customer?.id;
+            }
+            else if (user.role === "SERVICE_PROVIDER") {
+                const provider = await prisma.serviceProvider.findUnique({ where: { userId: user.id } });
+                providerId = provider?.id;
+            }
+            const token = jwt.sign({ id: user.id, email: user.email, role: user.role, customerId: customerId, providerId: providerId }, JWT_SECRET, {
                 expiresIn: JWT_EXPIRES_IN,
             });
 
@@ -71,7 +82,7 @@ class AuthController {
             // Respond with a success message and user data (optional)
             return res.json({
                 message: "Login successful",
-                user: {firstName: user.firstName, lastName: user.lastName, email: user.email, role: user.role },
+                user: { firstName: user.firstName, lastName: user.lastName, email: user.email, role: user.role },
             });
 
         } catch (error) {
@@ -237,7 +248,7 @@ class AuthController {
             const isVerified = await otpService.verifyPhoneOtp(userId, otp);
             if (isVerified) {
                 // Update user's phoneVerified status
-               const user = await prisma.user.update({
+                const user = await prisma.user.update({
                     where: { id: userId },
                     data: { phoneVerified: true }
                 });
