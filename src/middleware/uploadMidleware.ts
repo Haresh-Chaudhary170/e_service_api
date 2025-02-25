@@ -10,7 +10,7 @@ const storage = multer.diskStorage({
         if (!type) {
             return cb(new Error('Type is required to determine upload path'), '');
         }
-
+        // const providerId = req.user.providerId;
         let uploadPath = '';
         if (providerId) {
             uploadPath = path.join(
