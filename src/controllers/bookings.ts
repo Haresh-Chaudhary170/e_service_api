@@ -77,10 +77,9 @@ class BookingController {
         }
     }
     // Get bookings by provider ID
-    @Route("get", "/provider/:id")
+    @Route("get", "/provider", checkRole(['SERVICE_PROVIDER']))
     async getBookingsByProviderId(req: Request, res: Response, next: NextFunction) {
-        const { id } = req.params;
-
+        const id = req.user.providerId;
         try {
             const bookings = await prisma.booking.findMany({
                 where: { providerId: id },
@@ -91,8 +90,10 @@ class BookingController {
                     timeSlot: true,
                 },
             });
+            // get booking count
+            const total_bookings = await prisma.booking.count({ where: { providerId: id } });
 
-            res.status(200).json(bookings);
+            res.status(200).json({bookings,total_bookings});
         } catch (error) {
             console.error("Error fetching bookings:", error);
             res.status(500).json({ error: "Error fetching bookings" });

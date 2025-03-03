@@ -9,6 +9,9 @@ import { PrismaClient } from "@prisma/client";
 import { checkRole } from '../middleware/authMiddleware';
 import { singleUploadMiddleware } from '../middleware/uploadMidleware';
 import { logActivity } from '../library/activityLogger';
+import path from 'path';
+import fs from 'fs';
+
 const prisma = new PrismaClient();
 
 const categoryValidationSchema = z.object({
@@ -25,12 +28,38 @@ class CategoryController {
   @Route('get', '/get-all-admin')
   async getCategoriesAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      // Get all categories sorted by displayOrder
-      const categories = await prisma.category.findMany({ orderBy: { displayOrder: 'asc' } });
-      res.status(200).json(categories);
+      const { search, limit = 10, page = 1 } = req.query;
+
+      // Building filters dynamically based on the query params
+      const where: any = {
+        isActive: true,  // Keep only active categories
+      };
+
+      // If 'search' query parameter exists, add a search filter
+      if (search) {
+        where.name = {
+          contains: search as string,
+          mode: 'insensitive',  // Case insensitive search
+        };
+      }
+
+      // Get categories with pagination (limit and page)
+      const categories = await prisma.category.findMany({
+        where,
+        skip: (parseInt(page as string) - 1) * parseInt(limit as string), // Pagination
+        take: parseInt(limit as string), // Limit the number of results
+        orderBy: { createdAt: 'desc' }, // Order by most recent first
+      });
+
+      // Count total active categories matching the filters
+      const total_categories = await prisma.category.count({
+        where,
+      });
+
+      res.status(200).json({ categories, total_categories });
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: "Error fetching categories" });
+      res.status(500).json({ error: 'Error fetching categories' });
     }
   }
 
@@ -49,7 +78,7 @@ class CategoryController {
     }
   }
 
-  @Route('post', '/add', checkRole(['ADMIN']), singleUploadMiddleware)
+  @Route('post', '/add', checkRole(['SERVICE_PROVIDER']), singleUploadMiddleware)
   @Validate(categoryValidationSchema)
   async addCategory(req: Request, res: Response, next: NextFunction) {
     const { name, nameNp, description, descriptionNp, parentId } = req.body;
@@ -84,7 +113,7 @@ class CategoryController {
     }
   }
 
-  @Route('put', '/update/:id', singleUploadMiddleware) // Use the middleware here
+  @Route('put', '/update/:id', checkRole(['SERVICE_PROVIDER']), singleUploadMiddleware) // Use the middleware here
   async updateCategory(req: Request, res: Response, next: NextFunction) {
     const { id } = req.params;
     const { name, nameNp, description, descriptionNp, icon, parentId } = req.body;
@@ -95,6 +124,12 @@ class CategoryController {
     }
 
     try {
+      // Check if the category exists
+      const existingCategory = await prisma.category.findUnique({ where: { id } });
+      if (!existingCategory) {
+        return res.status(404).json({ error: "Category not found" });
+      }
+
       const data: any = {
         name,
         nameNp,
@@ -104,6 +139,12 @@ class CategoryController {
         parentId,
       }
       if (image) {
+        // Delete existing image if it exists
+        const filePath = existingCategory.image ? path.join(__dirname, '../../', existingCategory.image) : '';
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath); // Deletes the file
+        }
+
         data.image = `${image.destination}/${image.filename}`;
       }
       const category = await prisma.category.update({
@@ -125,11 +166,24 @@ class CategoryController {
     }
   }
 
-  @Route('delete', '/delete/:id')
+  @Route('delete', '/delete/:id', checkRole(['SERVICE_PROVIDER']))
   async deleteCategory(req: Request, res: Response, next: NextFunction) {
     const { id } = req.params;
 
     try {
+      // Check if the category exists
+      const existingCategory = await prisma.category.findUnique({ where: { id } });
+      if (!existingCategory) {
+        return res.status(404).json({ error: "Category not found" });
+      }
+
+      // Delete existing image if it exists
+      const filePath = existingCategory.image ? path.join(__dirname, '../../', existingCategory.image) : '';
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath); // Deletes the file
+      }
+
+      // Delete the category from the database
       await prisma.category.delete({ where: { id } });
       await logActivity({
         userId: req.user.id,
