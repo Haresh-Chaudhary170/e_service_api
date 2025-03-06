@@ -125,6 +125,38 @@ class ServiceProviderController {
         }
     }
 
+    // get date exclusion
+    @Route('get', '/get-date-exclusion', checkRole(['SERVICE_PROVIDER']))
+    async getDateExclusions(req: Request, res: Response, next: NextFunction) {
+        // check if provider exist
+        const existingProvider = await prisma.serviceProvider.findUnique({ where: { userId: req.user.id } });
+        if (!existingProvider) {
+            return res.status(404).json({ error: "Service Provider not found" });
+        }
+
+        try {
+            const dateExclusions = await prisma.dateExclusion.findMany({
+                where: {
+                    providerId: existingProvider.id,
+                },
+            });
+            // get date exclusion count
+            const total_dateExclusions = await prisma.dateExclusion.count({
+                where: {
+                    providerId: existingProvider.id,
+                },
+            });
+            res.status(200).json({
+                dateExclusions,
+                total_dateExclusions,
+                message: "Date exclusions retrieved successfully",
+            });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: "Error retrieving date exclusions" });
+        }
+    }
+
     // add service provider schedule
     @Route('post', '/add-schedule', checkRole(['SERVICE_PROVIDER']))
     @Validate(providerScheduleSchema)

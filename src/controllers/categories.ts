@@ -63,7 +63,7 @@ class CategoryController {
     }
   }
 
-  @Route('get', '/get-all')
+  @Route('get', '/get-all', checkRole(['SERVICE_PROVIDER']))
   async getCategories(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       // Get all categories where isActive is true and sorted boy displayOrder

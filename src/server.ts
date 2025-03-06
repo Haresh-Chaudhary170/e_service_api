@@ -2,7 +2,7 @@ import http from 'http';
 import express from 'express';
 import bodyParser from 'body-parser';
 import cookieParser from 'cookie-parser';
-import cors from 'cors'
+import cors from 'cors';
 import './config/logging';
 import 'reflect-metadata';
 
@@ -29,17 +29,30 @@ import path from 'path';
 
 export const application = express();
 export let httpServer: ReturnType<typeof http.createServer>;
+
+// Middleware
 application.use(bodyParser.json());
 application.use(cookieParser());
-const allowedOrigins = ['http://localhost:3000'];
+
+// CORS Configuration
+const allowedOrigins = ['http://localhost:3000', 'https://your-production-domain.com'];
 
 application.use(cors({
-    origin: "http://localhost:3000",
-    credentials: true, // Allow cookies to be sent
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-const uploadsDirectory = path.resolve(__dirname, '../uploads');  // Relative to the src folder
-application.use('/uploads', express.static(uploadsDirectory));
 
+// Static File Serving
+const uploadsDirectory = path.resolve(__dirname, '../uploads');
+application.use('/uploads', express.static(uploadsDirectory));
 
 export const Main = async () => {
     logging.log('----------------------------------------');
@@ -47,7 +60,6 @@ export const Main = async () => {
     logging.log('----------------------------------------');
     application.use(express.urlencoded({ extended: true }));
     application.use(express.json());
-
 
     logging.log('----------------------------------------');
     logging.log('Logging & Configuration');

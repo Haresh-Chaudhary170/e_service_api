@@ -25,7 +25,7 @@ class ServiceController {
     //     }
     // }
 
-    @Route('get', '/get-all')
+    @Route('get', '/get-all', checkRole(['SERVICE_PROVIDER']))
     async getServices(req: Request, res: Response, next: NextFunction): Promise<void> {
         try {
             // Get all services where isActive is true and sorted boy displayOrder
@@ -41,7 +41,7 @@ class ServiceController {
             res.status(500).json({ error: "Error fetching services" });
         }
     }
-    @Route('get', '/get-all-admin')
+    @Route('get', '/get-all-admin', checkRole(['SERVICE_PROVIDER']))
     async getServicesAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
         try {
             const { search, categories, limit = 10, page = 1 } = req.query;
