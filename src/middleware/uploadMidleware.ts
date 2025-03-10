@@ -6,6 +6,7 @@ import fs from 'fs';
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         const { providerId, type, name } = req.body;
+        console.log(type);
 
         if (!type) {
             return cb(new Error('Type is required to determine upload path'), '');

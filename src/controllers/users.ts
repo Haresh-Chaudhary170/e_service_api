@@ -274,6 +274,196 @@ class UserController {
     }
   }
 
+
+  // get user by id
+  @Route('get', '/me', checkRole(['CUSTOMER', 'SERVICE_PROVIDER']))
+  async getUserById(req: Request, res: Response, next: NextFunction) {
+    const { id } = req.user;
+    try {
+      const user = await prisma.user.findUnique({ where: { id } });
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.status(200).json(user); // Return the user object
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error fetching user" });
+    }
+  } 
+// update user
+  @Route('put', '/update', checkRole(['CUSTOMER', 'SERVICE_PROVIDER']))
+  async updateUser(req: Request, res: Response, next: NextFunction) {
+    const { id } = req.user;
+    const { firstName, lastName, email, phone } = req.body;
+    try {
+      // Check if the user exists
+      const existingUser = await prisma.user.findUnique({ where: { id } });
+      if (!existingUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      // Update the user in the database
+      const user = await prisma.user.update({
+        where: { id },
+        data: { firstName, lastName, email, phone },
+      });
+
+      await logActivity({
+        userId: user.id,
+        action: "User Updated",
+        entity: "User",
+        entityId: user.id,
+        details: { email },
+        req,
+      })
+
+      res.status(200).json(user);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error updating user" });
+    }
+  }
+
+  // update user avatar
+  @Route('put', '/update-avatar', checkRole(['CUSTOMER', 'SERVICE_PROVIDER']), singleUploadMiddleware)
+  async updateAvatar(req: Request, res: Response, next: NextFunction) {
+    const { id } = req.user;
+    const file = req.file as Express.Multer.File;
+    try {
+      // Check if the user exists
+      const existingUser = await prisma.user.findUnique({ where: { id } });
+      if (!existingUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      // Update the user in the database
+      const user = await prisma.user.update({
+        where: { id },
+        data: { avatar: `${file.destination}/${file.filename}` },
+      });
+      res.status(200).json(user);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error updating user avatar" });
+    }
+  }
+
+  // get all providers
+  @Route('get', '/get-all-providers')
+  async getAllProviders(req: Request, res: Response, next: NextFunction) {
+    try {
+      const providers = await prisma.serviceProvider.findMany({
+        include: {
+          user: true,
+          category: true,
+        },
+        orderBy: {
+          user: {
+            createdAt: 'desc', // Correct ordering for user.createdAt
+          },
+        },
+      });
+      res.status(200).json(providers);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error fetching providers" });
+    }
+  }
+
+  // GET PROVIDER BY ID
+  @Route('get', '/get-provider/:id')
+  async getProvider(req: Request, res: Response, next: NextFunction) {
+    const { id } = req.params;
+    try {
+      const provider = await prisma.serviceProvider.findUnique({
+        where: { id: id },
+        include: {
+          user: true,
+          category: true,
+          serviceAreas: true,
+          services: true,
+          schedules: true,
+          workingHours: true,
+          unavailableDates: true,
+        },
+      });
+      if (!provider) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+      res.status(200).json(provider);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error fetching provider" });
+    }
+  }
+
+  // get provider by id
+  @Route('get', '/get-provider-details', checkRole(['SERVICE_PROVIDER','CUSTOMER']))
+  async getProviderById(req: Request, res: Response, next: NextFunction) {
+    const { id } = req.user;
+    try {
+      const provider = await prisma.serviceProvider.findFirst({ where: { userId: id } });
+      if (!provider) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+      res.status(200).json(provider); // Return the provider object
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error fetching provider" });
+    }
+  }
+
+  // update provider
+  @Route('put', '/update-provider', checkRole(['SERVICE_PROVIDER']))
+  async updateProvider(req: Request, res: Response, next: NextFunction) {
+    const { id } = req.user;
+    const { bio, experience, businessName, categoryId } = req.body;
+    try {
+      // Check if the provider exists
+      const existingProvider = await prisma.serviceProvider.findFirst({ where: { userId: id } });
+      if (!existingProvider) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+      // Update the provider in the database
+      const provider = await prisma.serviceProvider.update({
+        where: { id: existingProvider.id },
+        data: { bio, experience, businessName, categoryId },
+      });
+      res.status(200).json(provider);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error updating provider" });
+    }
+  }
+
+  // delete user
+  @Route('delete', '/delete/:id', checkRole(['ADMIN', 'SUPERADMIN']))
+  async deleteUser(req: Request, res: Response, next: NextFunction) {
+    const { id } = req.params;
+    try {
+      // Check if the user exists
+      const existingUser = await prisma.user.findUnique({ where: { id } });
+      if (!existingUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Delete the user from the database
+      await prisma.user.delete({ where: { id } });
+
+      await logActivity({
+        userId: req.user.id,
+        action: "User Deleted",
+        entity: "User",
+        entityId: id,
+        details: { email: existingUser.email },
+        req,
+      })
+
+      res.status(200).json({ message: "User deleted successfully" });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error deleting user" });
+    }
+  }
 }
+
 
 export default UserController;
