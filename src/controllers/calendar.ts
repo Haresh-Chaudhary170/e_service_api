@@ -12,39 +12,110 @@ const prisma = new PrismaClient();
 
 @Controller('/api/calendar')
 class ServiceProviderController {
-    // add service area
+    // add or update service area
     @Route('post', '/add-service-area', checkRole(['SERVICE_PROVIDER']))
     @Validate(serviceAreaSchema)
     async uploadAddress(req: Request, res: Response, next: NextFunction) {
         const { name, polygon } = req.body;
+
+        // check if provider exists
+        const existingProvider = await prisma.serviceProvider.findUnique({ where: { userId: req.user.id } });
+        if (!existingProvider) {
+            return res.status(404).json({ error: "Service Provider not found" });
+        }
+
+        try {
+            // Use findFirst instead of findUnique to handle non-unique providerId
+            const existingServiceArea = await prisma.serviceArea.findFirst({
+                where: {
+                    providerId: existingProvider.id,  // Checking if a service area exists for the provider
+                },
+            });
+
+            let serviceArea;
+            if (existingServiceArea) {
+                // If the service area exists, update it
+                serviceArea = await prisma.serviceArea.update({
+                    where: {
+                        id: existingServiceArea.id,  // Use the existing service area's ID for the update
+                    },
+                    data: {
+                        name,     // Update the name
+                        polygon,  // Update the polygon
+                    },
+                });
+                // Log activity for update
+                await logActivity({
+                    userId: req.user.id,
+                    action: "Service Area Updated",
+                    entity: "serviceArea",
+                    entityId: serviceArea.id,
+                    details: { name },
+                    req,
+                });
+                res.status(200).json({
+                    serviceArea,
+                    message: "Service area updated successfully",
+                });
+            } else {
+                // If the service area doesn't exist, create it
+                serviceArea = await prisma.serviceArea.create({
+                    data: {
+                        name,       // Create with the new name
+                        polygon,    // Create with the new polygon
+                        providerId: existingProvider.id,
+                    },
+                });
+                // Log activity for creation
+                await logActivity({
+                    userId: req.user.id,
+                    action: "Service Area Added",
+                    entity: "serviceArea",
+                    entityId: serviceArea.id,
+                    details: { name },
+                    req,
+                });
+                res.status(200).json({
+                    serviceArea,
+                    message: "Service area created successfully",
+                });
+            }
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ error: "Error creating or updating service area" });
+        }
+    }
+
+
+    // get service area
+    @Route('get', '/get-service-area', checkRole(['SERVICE_PROVIDER']))
+    async getServiceAreas(req: Request, res: Response, next: NextFunction) {
         // check if provider exist
         const existingProvider = await prisma.serviceProvider.findUnique({ where: { userId: req.user.id } });
         if (!existingProvider) {
             return res.status(404).json({ error: "Service Provider not found" });
         }
         try {
-            const serviceArea = await prisma.serviceArea.create({
-                data: {
-                    name,
-                    polygon,
+            const serviceAreas = await prisma.serviceArea.findFirst({
+                where: {
                     providerId: existingProvider.id,
                 },
             });
-            await logActivity({
-                userId: req.user.id,
-                action: "Service Area Added.",
-                entity: "serviceArea",
-                entityId: serviceArea.id,
-                details: { name },
-                req,
-            })
+            // get service area count
+            // const total_serviceAreas = await prisma.serviceArea.count({
+            //     where: {
+            //         providerId: existingProvider.id,
+            //     },
+            // });
             res.status(200).json({
-                serviceArea,
-                message: "Service area created successfully",
+                serviceAreas,
+                // total_serviceAreas,
+                message: "Service areas retrieved successfully",
             });
-        } catch (error) {
+        }
+        catch (error) {
             console.error(error);
-            res.status(500).json({ error: "Error creating service area" });
+            res.status(500).json({ error: "Error retrieving service areas" });
         }
     }
 
