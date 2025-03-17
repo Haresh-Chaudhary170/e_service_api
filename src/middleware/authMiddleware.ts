@@ -16,7 +16,7 @@ export const checkRole = (roles: string[] = []) => {
             // Check if the JWT is present in cookies
             const token = req.cookies?.token;
             if (!token) {
-                res.status(401).json({ error: "Authentication required!" });
+                res.status(401).json({ error: "Loogin required!" });
                 return;
             }
 

@@ -160,6 +160,8 @@ model ServiceProvider {
   workingHours     WorkingHours[]
   unavailableDates DateExclusion[]
   certification    Certification[]
+  carts         Cart[]
+
 }
 
 model ServiceArea {
@@ -378,6 +380,8 @@ model Cart {
   userId    String
   serviceId String
   quantity  Int      @default(1)
+  providerId String
+  ServiceProvider ServiceProvider @relation(fields: [providerId], references: [id])
   user      User     @relation(fields: [userId], references: [id])
   service   Service  @relation(fields: [serviceId], references: [id])
   createdAt DateTime @default(now())

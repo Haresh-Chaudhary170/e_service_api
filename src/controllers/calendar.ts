@@ -119,19 +119,84 @@ class ServiceProviderController {
         }
     }
 
-    // add working hours
-    @Route('post', '/add-working-hours', checkRole(['SERVICE_PROVIDER']))
-    @Validate(workingHoursSchema)
-    async addWorkingHours(req: Request, res: Response, next: NextFunction) {
-        const { dayOfWeek, startTime, endTime, breakStart, breakEnd } = req.body;
-        // check if provider exist
-        const existingProvider = await prisma.serviceProvider.findUnique({ where: { userId: req.user.id } });
-        if (!existingProvider) {
-            return res.status(404).json({ error: "Service Provider not found" });
-        }
+    // // add working hours
+    // @Route('post', '/add-working-hours', checkRole(['SERVICE_PROVIDER']))
+    // @Validate(workingHoursSchema)
+    // async addWorkingHours(req: Request, res: Response, next: NextFunction) {
+    //     const { dayOfWeek, startTime, endTime, breakStart, breakEnd } = req.body;
+    //     // check if provider exist
+    //     const existingProvider = await prisma.serviceProvider.findUnique({ where: { userId: req.user.id } });
+    //     if (!existingProvider) {
+    //         return res.status(404).json({ error: "Service Provider not found" });
+    //     }
 
-        try {
-            const workingHours = await prisma.workingHours.create({
+    //     try {
+    //         const workingHours = await prisma.workingHours.create({
+    //             data: {
+    //                 dayOfWeek,
+    //                 startTime,
+    //                 endTime,
+    //                 breakStart,
+    //                 breakEnd,
+    //                 providerId: existingProvider.id,
+    //             },
+    //         });
+    //         await logActivity({
+    //             userId: req.user.id,
+    //             action: "Working Hours Added.",
+    //             entity: "workingHours",
+    //             entityId: workingHours.id,
+    //             details: { dayOfWeek, startTime, endTime, breakStart, breakEnd },
+    //             req,
+    //         })
+    //         res.status(200).json({
+    //             workingHours,
+    //             message: "Working hours created successfully",
+    //         });
+    //     } catch (error) {
+    //         console.error(error);
+    //         res.status(500).json({ error: "Error creating working hours" });
+    //     }
+    // }
+
+@Route('post', '/add-working-hours', checkRole(['SERVICE_PROVIDER']))
+@Validate(workingHoursSchema)
+async addWorkingHours(req: Request, res: Response, next: NextFunction) {
+    const { id, dayOfWeek, startTime, endTime, breakStart, breakEnd } = req.body;
+
+    // Check if the provider exists
+    const existingProvider = await prisma.serviceProvider.findUnique({ where: { userId: req.user.id } });
+    if (!existingProvider) {
+        return res.status(404).json({ error: "Service Provider not found" });
+    }
+
+    try {
+        let workingHours;
+
+        if (id) {
+            // Update existing working hours
+            workingHours = await prisma.workingHours.update({
+                where: { id },
+                data: {
+                    dayOfWeek,
+                    startTime,
+                    endTime,
+                    breakStart,
+                    breakEnd,
+                },
+            });
+
+            await logActivity({
+                userId: req.user.id,
+                action: "Working Hours Updated.",
+                entity: "workingHours",
+                entityId: workingHours.id,
+                details: { dayOfWeek, startTime, endTime, breakStart, breakEnd },
+                req,
+            });
+        } else {
+            // Create new working hours
+            workingHours = await prisma.workingHours.create({
                 data: {
                     dayOfWeek,
                     startTime,
@@ -141,6 +206,7 @@ class ServiceProviderController {
                     providerId: existingProvider.id,
                 },
             });
+
             await logActivity({
                 userId: req.user.id,
                 action: "Working Hours Added.",
@@ -148,14 +214,41 @@ class ServiceProviderController {
                 entityId: workingHours.id,
                 details: { dayOfWeek, startTime, endTime, breakStart, breakEnd },
                 req,
-            })
+            });
+        }
+
+        res.status(200).json({
+            workingHours,
+            message: id ? "Working hours updated successfully" : "Working hours created successfully",
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Error saving working hours" });
+    }
+}
+
+    // get working hours
+    @Route('get', '/get-working-hours', checkRole(['SERVICE_PROVIDER']))
+    async getWorkingHours(req: Request, res: Response, next: NextFunction) {
+        // check if provider exist
+        const existingProvider = await prisma.serviceProvider.findUnique({ where: { userId: req.user.id } });
+        if (!existingProvider) {
+            return res.status(404).json({ error: "Service Provider not found" });
+        }
+        try {
+            const workingHours = await prisma.workingHours.findMany({
+                where: {
+                    providerId: existingProvider.id,
+                },
+            });
+
             res.status(200).json({
                 workingHours,
-                message: "Working hours created successfully",
+                message: "Working hours retrieved successfully",
             });
         } catch (error) {
             console.error(error);
-            res.status(500).json({ error: "Error creating working hours" });
+            res.status(500).json({ error: "Error retrieving working hours" });
         }
     }
     // add date exclusion

@@ -9,6 +9,7 @@ import { PrismaClient } from "@prisma/client";
 import { checkRole } from '../middleware/authMiddleware';
 import { singleUploadMiddleware } from '../middleware/uploadMidleware';
 import { logActivity } from '../library/activityLogger';
+import { error } from 'console';
 const prisma = new PrismaClient();
 
 const cartValidationSchema = z.object({
@@ -34,24 +35,29 @@ class CartController {
         }
     }
 
-    @Route('get', '/get', checkRole(['CUSTOMER']))
+    @Route('get', '/get/:provider', checkRole(['CUSTOMER']))
     async getCarts(req: Request, res: Response, next: NextFunction): Promise<void> {
+        const providerId = req.params.provider;
+
         try {
-            // Get all categories where isActive is true and sorted boy displayOrder
-            const categories = await prisma.cart.findMany({
-                where: { userId: req.user.id },
+            // Get all carts where isActive is true and sorted boy displayOrder
+            const carts = await prisma.cart.findMany({
+                where: { userId: req.user.id, providerId },
+                include:{
+                    service:true
+                },
                 orderBy: { createdAt: 'desc' },
             });
-            res.status(200).json(categories);
+            res.status(200).json(carts);
         } catch (error) {
             console.error(error);
-            res.status(500).json({ error: "Error fetching categories" });
+            res.status(500).json({ error: "Error fetching carts" });
         }
     }
 
     @Route('post', '/add', checkRole(['CUSTOMER']))
     async addToCart(req: Request, res: Response, next: NextFunction) {
-        const { serviceId, quantity } = req.body;
+        const { serviceId, quantity, providerId } = req.body;
         // check if the quantity is non nagative
         if (quantity < 1) {
             return res.status(400).json({ error: "Quantity should not be less than 1" });
@@ -65,21 +71,20 @@ class CartController {
             });
 
             if (existingCartItem) {
-                res.status(200).json({
-                    message: "Service already in cart",
-                    cart: existingCartItem,
+                return res.status(400).json({
+                    error: "Service already in cart",
                 })
-            } else {
-                const cartItem = await prisma.cart.create({
-                    data: { userId:req.user.id, serviceId, quantity: parseInt(quantity) },
-                });
-
-                res.status(200).json({ cartItem, message: "Service added to cart" });
             }
+            const cartItem = await prisma.cart.create({
+                data: { userId: req.user.id, serviceId, quantity: parseInt(quantity), providerId },
+            });
+
+            return res.status(200).json({ cartItem, message: "Service added to cart" });
+
 
         } catch (error) {
             console.log(error);
-            res.status(500).json({ error: "Error adding service to cart" });
+            return res.status(500).json({ error: "Error adding service to cart" });
 
         }
     }
@@ -115,7 +120,7 @@ class CartController {
         }
     }
 
-    @Route('delete', '/delete/:id')
+    @Route('delete', '/delete/:id', checkRole(['CUSTOMER']))
     async deleteCart(req: Request, res: Response, next: NextFunction) {
         const { id } = req.params;
 
