@@ -21,7 +21,6 @@ class BookingController {
                     customer: true,
                     service: true,
                     provider: true,
-                    timeSlot: true,
                 },
             });
 
@@ -44,7 +43,6 @@ class BookingController {
                     customer: true,
                     service: true,
                     provider: true,
-                    timeSlot: true,
                 },
             });
 
@@ -66,7 +64,6 @@ class BookingController {
                     customer: true,
                     service: true,
                     provider: true,
-                    timeSlot: true,
                 },
             });
 
@@ -87,7 +84,6 @@ class BookingController {
                     customer: true,
                     service: true,
                     provider: true,
-                    timeSlot: true,
                 },
             });
             // get booking count
@@ -111,7 +107,6 @@ class BookingController {
                     customer: true,
                     service: true,
                     provider: true,
-                    timeSlot: true,
                 },
             });
 
@@ -160,8 +155,9 @@ class BookingController {
         const {
             serviceId,
             providerId,
-            timeSlotId,
             scheduledDate,
+            scheduleStartTime,
+            scheduleEndTime,
             totalAmount,
             notes,
             location,
@@ -176,14 +172,7 @@ class BookingController {
             return res.status(404).json({ error: "Provider not found" });
         }
 
-        // check if time slot is available
-        const timeSlot = await prisma.timeSlot.findUnique({
-            where: { id: timeSlotId, isAvailable: true },
-        });
 
-        if (!timeSlot) {
-            return res.status(404).json({ error: "Time slot not found or is unavailable." });
-        }
 
         try {
             const booking = await prisma.booking.create({
@@ -191,8 +180,9 @@ class BookingController {
                     customerId: customer.id,
                     serviceId,
                     providerId,
-                    timeSlotId,
                     scheduledDate: new Date(scheduledDate),
+                    scheduleStartTime,
+                    scheduleEndTime,
                     totalAmount,
                     notes,
                     location,
@@ -253,7 +243,6 @@ class BookingController {
                     customerId,
                     serviceId,
                     providerId,
-                    timeSlotId,
                     status,
                     scheduledDate: scheduledDate ? new Date(scheduledDate) : undefined,
                     completedDate: completedDate ? new Date(completedDate) : undefined,
