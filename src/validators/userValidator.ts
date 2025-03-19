@@ -32,14 +32,12 @@ export const providerDocumentSchema = z.object({
 });
 
 export const addressSchema = z.object({
-    userId: z.string(),
-    type: z.enum(['HOME', 'OFFICE', 'OTHER']),
-    name: z.string().min(1, 'Address label is required'),
+    name: z.string().min(1, 'Name is required'),
+    phone: z.string().min(1, 'Phone is required'),
     street: z.string().min(1, 'Street address is required'),
     area: z.string().optional(),
     city: z.string().min(1, 'City is required'),
     state: z.string().min(1, 'State is required'),
-    zipCode: z.string().optional(),
     landmark: z.string().optional(),
     location: z.string(),
     metadata: z.unknown().optional()

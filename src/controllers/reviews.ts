@@ -78,7 +78,7 @@ class ReviewController {
         }
         // check if has any bookings
         const bookings = await prisma.booking.findMany({
-            where: { customerId: customer.id, serviceId: serviceId },
+            where: { customerId: customer.id },
         });
 
         if (bookings.length < 1) {

@@ -11,11 +11,9 @@ const geoJSONPointSchema = z.object({
 
 // Zod schema for the Booking model
 export const bookingValidationSchema = z.object({
-    serviceId: z.string().min(1, "Service ID is required"),
+    addressId: z.string().min(1, "Address ID is required"),
     providerId: z.string().min(1, "Provider ID is required"),
-    timeSlotId: z.string().min(1, "Time Slot ID is required"),
     scheduledDate: z.string().datetime({ message: "Scheduled date must be a valid ISO date" }),
-    totalAmount: z.number().min(0, "Total amount must be greater than or equal to 0"),
+    totalAmount: z.string().min(1, "Total amount must be greater than or equal to 0"),
     notes: z.string().optional(),
-    location: geoJSONPointSchema, // Validates location as GeoJSON Point
 });

@@ -240,37 +240,80 @@ class UserController {
   }
 
 
-  @Route('post', '/add-address')
+  @Route('post', '/add-address', checkRole(["CUSTOMER"]))
   @Validate(addressSchema)
   async uploadAddress(req: Request, res: Response, next: NextFunction) {
-    const { userId, type, name, street, area, city, state, zipCode, landmark, location, metadata } = req.body;
-    // check if user exist
-    const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+    const { name, phone, street, area, city, state, landmark, location, metadata } = req.body;
+
+    // Check if the user exists
+    const existingUser = await prisma.user.findUnique({ where: { id: req.user.id } });
     if (!existingUser) {
       return res.status(404).json({ error: "User not found" });
     }
 
     try {
-      // Create the address in the database
-      const address = await prisma.address.create({
-        data: { userId, type, name, street, area, city, state, zipCode, landmark, location, metadata },
+      // Check if an address already exists for the user
+      const existingAddress = await prisma.address.findFirst({
+        where: { userId: req.user.id },
       });
 
+      let address;
+      if (existingAddress) {
+        // Update the existing address
+        address = await prisma.address.update({
+          where: { id: existingAddress.id },
+          data: {  name, phone, street, area, city, state, landmark, location, metadata },
+        });
+      } else {
+        // Create a new address
+        address = await prisma.address.create({
+          data: { userId: req.user.id, type:"HOME", name, phone, street, area, city, state, landmark, location, metadata },
+        });
+      }
+
+      // Log the activity
       await logActivity({
         userId: existingUser.id,
-        action: `Added Address - ${name}`,
+        action: existingAddress ? `Updated Address - ${name}` : `Added Address - ${name}`,
         entity: 'Address',
         entityId: address.id,
-        details: { type, name },
+        details: address,
         req,
-      })
+      });
+
       res.status(200).json({
         address,
-        message: "Address created successfully",
+        message: existingAddress ? "Address updated successfully" : "Address created successfully",
       });
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: "Error creating address" });
+      res.status(500).json({ error: "Error processing address" });
+    }
+  }
+
+  // get address
+  @Route('get', '/get-address', checkRole(["CUSTOMER"]))
+  async getAddress(req: Request, res: Response, next: NextFunction) {
+
+    // Check if the user exists
+    const existingUser = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    try {
+      // Check if an address already exists for the user
+      const address = await prisma.address.findFirst({
+        where: { userId: req.user.id },
+      });
+
+      res.status(200).json({
+        address,
+        message: "Address fetched successfully",
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error processing address" });
     }
   }
 

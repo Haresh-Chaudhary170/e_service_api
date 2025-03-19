@@ -258,8 +258,8 @@ model Service {
   providerId  String
   category    Category        @relation(fields: [categoryId], references: [id])
   categoryId  String
-  bookings    Booking[]
   carts       Cart[]
+  bookedItems BookedItem[]
   reviews     Review[]
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
@@ -269,29 +269,42 @@ model Booking {
   id                String               @id @default(cuid())
   customer          Customer             @relation(fields: [customerId], references: [id])
   customerId        String
-  service           Service              @relation(fields: [serviceId], references: [id])
-  serviceId         String
   provider          ServiceProvider      @relation(fields: [providerId], references: [id])
   providerId        String
+  address           Address?             @relation(fields: [addressId], references: [id])
+  addressId         String?
   status            BookingStatus        @default(PENDING)
+  type              String
   scheduledDate     DateTime
   scheduleStartTime String
   scheduleEndTime   String
   completedDate     DateTime?
   totalAmount       Float
+  paymentMethod     String
   payment           Payment?
   notes             String?
-  location          Json // GeoJSON point for service location
+  location          Json? // GeoJSON point for service location
   trackingLogs      ServiceTrackingLog[]
+  bookedItems       BookedItem[]
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
+}
+
+model BookedItem {
+  id        String   @id @default(cuid())
+  service   Service  @relation(fields: [serviceId], references: [id])
+  serviceId String
+  booking   Booking  @relation(fields: [bookingId], references: [id])
+  bookingId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model ServiceTrackingLog {
   id        String        @id @default(cuid())
   booking   Booking       @relation(fields: [bookingId], references: [id])
   bookingId String
-  location  Json // GeoJSON point
+  location  Json? // GeoJSON point
   status    BookingStatus
   timestamp DateTime      @default(now())
   metadata  Json? // Additional tracking data
@@ -315,7 +328,7 @@ model Payment {
   booking       Booking       @relation(fields: [bookingId], references: [id])
   bookingId     String        @unique
   amount        Float
-  method        PaymentMethod
+  method        String
   status        PaymentStatus @default(PENDING)
   transactionId String? // External payment gateway transaction ID
   paymentDate   DateTime?
@@ -387,11 +400,12 @@ model Cart {
 }
 
 model Address {
-  id         String   @id @default(cuid())
-  user       User     @relation(fields: [userId], references: [id])
+  id         String    @id @default(cuid())
+  user       User      @relation(fields: [userId], references: [id])
   userId     String
   type       String // HOME, OFFICE, OTHER
   name       String // Label for the address
+  phone      String
   street     String
   area       String?
   city       String
@@ -399,11 +413,12 @@ model Address {
   zipCode    String?
   landmark   String?
   location   Json // GeoJSON point
-  isDefault  Boolean  @default(false)
-  isVerified Boolean  @default(false)
+  isDefault  Boolean   @default(false)
+  isVerified Boolean   @default(false)
   metadata   Json? // Additional address data
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  bookings   Booking[] // Relation to Booking model
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 }
 
 model OTP {

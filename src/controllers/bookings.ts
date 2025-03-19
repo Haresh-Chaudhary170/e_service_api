@@ -19,7 +19,6 @@ class BookingController {
             const bookings = await prisma.booking.findMany({
                 include: {
                     customer: true,
-                    service: true,
                     provider: true,
                 },
             });
@@ -41,7 +40,6 @@ class BookingController {
                 where: { customerId: id },
                 include: {
                     customer: true,
-                    service: true,
                     provider: true,
                 },
             });
@@ -53,26 +51,26 @@ class BookingController {
         }
     }
     // Get bookings by service ID
-    @Route("get", "/service/:id", checkRole(['SERVICE_PROVIDER', 'ADMIN']))
-    async getBookingsByServiceId(req: Request, res: Response, next: NextFunction) {
-        const { id } = req.params;
+    // @Route("get", "/service/:id", checkRole(['SERVICE_PROVIDER', 'ADMIN']))
+    // async getBookingsByServiceId(req: Request, res: Response, next: NextFunction) {
+    //     const { id } = req.params;
 
-        try {
-            const bookings = await prisma.booking.findMany({
-                where: { serviceId: id },
-                include: {
-                    customer: true,
-                    service: true,
-                    provider: true,
-                },
-            });
+    //     try {
+    //         const bookings = await prisma.booking.findMany({
+    //             where: { serviceId: id },
+    //             include: {
+    //                 customer: true,
+    //                 service: true,
+    //                 provider: true,
+    //             },
+    //         });
 
-            res.status(200).json(bookings);
-        } catch (error) {
-            console.error("Error fetching bookings:", error);
-            res.status(500).json({ error: "Error fetching bookings" });
-        }
-    }
+    //         res.status(200).json(bookings);
+    //     } catch (error) {
+    //         console.error("Error fetching bookings:", error);
+    //         res.status(500).json({ error: "Error fetching bookings" });
+    //     }
+    // }
     // Get bookings by provider ID
     @Route("get", "/provider", checkRole(['SERVICE_PROVIDER']))
     async getBookingsByProviderId(req: Request, res: Response, next: NextFunction) {
@@ -82,7 +80,6 @@ class BookingController {
                 where: { providerId: id },
                 include: {
                     customer: true,
-                    service: true,
                     provider: true,
                 },
             });
@@ -105,7 +102,6 @@ class BookingController {
                 where: { id },
                 include: {
                     customer: true,
-                    service: true,
                     provider: true,
                 },
             });
@@ -136,13 +132,13 @@ class BookingController {
             return res.status(401).json({ error: "Unauthorized" });
         }
         // check if email is verified
-        if (user.emailVerified) {
-            return res.status(401).json({ error: "Email not verified. Please verify your email first." });
-        }
-        // check if phone is verified
-        if (user.phoneVerified) {
-            return res.status(401).json({ error: "Phone number not verified. Please verify your phone number first." });
-        }
+        // if (user.emailVerified) {
+        //     return res.status(401).json({ error: "Email not verified. Please verify your email first." });
+        // }
+        // // check if phone is verified
+        // if (user.phoneVerified) {
+        //     return res.status(401).json({ error: "Phone number not verified. Please verify your phone number first." });
+        // }
         // check if the user is customer
         const customer = await prisma.customer.findUnique({
             where: { userId: uid },
@@ -153,14 +149,15 @@ class BookingController {
         }
 
         const {
-            serviceId,
             providerId,
+            addressId,
+            type,
+            paymentMethod,
             scheduledDate,
             scheduleStartTime,
             scheduleEndTime,
             totalAmount,
             notes,
-            location,
         } = req.body;
 
         // check if provider exists
@@ -178,25 +175,35 @@ class BookingController {
             const booking = await prisma.booking.create({
                 data: {
                     customerId: customer.id,
-                    serviceId,
+                    addressId,
+                    type,
+                    paymentMethod,
                     providerId,
                     scheduledDate: new Date(scheduledDate),
                     scheduleStartTime,
                     scheduleEndTime,
-                    totalAmount,
+                    totalAmount: parseFloat(totalAmount),
                     notes,
-                    location,
                 },
             });
+            const cartItems= await prisma.cart.findMany({where:{userId:uid}});
+            cartItems.map(async (item)=>{
+                await prisma.bookedItem.create({
+                    data:{
+                        serviceId:item.serviceId,
+                        bookingId:booking.id,
+                    }
+                })
+            })
             // add to serviceTrackingLog
             await prisma.serviceTrackingLog.create({
                 data: {
-                    location,
                     bookingId: booking.id,
                     status: "PENDING",
                     metadata: { message: "Booking Initiated" }
                 },
             });
+            await prisma.cart.deleteMany({where:{userId:uid}})
             await logActivity({
                 userId: uid,
                 action: "Initiated Booking.",
@@ -241,7 +248,6 @@ class BookingController {
                 where: { id },
                 data: {
                     customerId,
-                    serviceId,
                     providerId,
                     status,
                     scheduledDate: scheduledDate ? new Date(scheduledDate) : undefined,

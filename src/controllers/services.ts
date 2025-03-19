@@ -267,7 +267,6 @@ class ServiceController {
                 include: {
                     provider: true,
                     category: true,
-                    bookings: true
                 }
             });
             res.status(200).json(services);
@@ -287,7 +286,6 @@ class ServiceController {
                 include: {
                     provider: true,
                     category: true,
-                    bookings: true
                 }
             });
             res.status(200).json(service);
