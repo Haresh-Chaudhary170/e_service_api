@@ -80,20 +80,54 @@ class BookingController {
                 where: { providerId: id },
                 include: {
                     customer: true,
-                    provider: true,
+                    provider: {
+                        include: {
+                            serviceAreas: true
+                        }
+                    },
+                    bookedItems: {
+                        include: {
+                            service: true
+                        }
+                    },
+                    address: true
                 },
+                orderBy: { createdAt: 'desc' }
             });
             // get booking count
             const total_bookings = await prisma.booking.count({ where: { providerId: id } });
 
-            res.status(200).json({bookings,total_bookings});
+            res.status(200).json({ bookings, total_bookings });
         } catch (error) {
             console.error("Error fetching bookings:", error);
             res.status(500).json({ error: "Error fetching bookings" });
         }
     }
+
+    //update booking status
+    @Route("put", "/:id", checkRole(['SERVICE_PROVIDER']))
+    async changeStatus(req: Request, res: Response, next: NextFunction) {
+        const { status } = req.body;
+        const { id } = req.params;
+
+        try {
+            const booking = prisma.booking.update({
+                where: { id },
+                data: {
+                    status
+                }
+            })
+
+            res.status(200).json({booking, nessage:"Status changed successfully."});
+        } catch (error) {
+            console.error("Error fetching booking:", error);
+            res.status(500).json({ error: "Error fetching booking" });
+        }
+    }
+
+
     // Get a single booking by ID
-    @Route("get", "/:id")
+    @Route("get", "/:id", checkRole(['CUSTOMER', 'SERVICE_PROVIDER', 'ADMIN']))
     async getBookingById(req: Request, res: Response, next: NextFunction) {
         const { id } = req.params;
 
@@ -102,7 +136,17 @@ class BookingController {
                 where: { id },
                 include: {
                     customer: true,
-                    provider: true,
+                    provider: {
+                        include: {
+                            serviceAreas: true
+                        }
+                    },
+                    bookedItems: {
+                        include: {
+                            service: true
+                        }
+                    },
+                    address: true
                 },
             });
 
@@ -186,12 +230,12 @@ class BookingController {
                     notes,
                 },
             });
-            const cartItems= await prisma.cart.findMany({where:{userId:uid}});
-            cartItems.map(async (item)=>{
+            const cartItems = await prisma.cart.findMany({ where: { userId: uid } });
+            cartItems.map(async (item) => {
                 await prisma.bookedItem.create({
-                    data:{
-                        serviceId:item.serviceId,
-                        bookingId:booking.id,
+                    data: {
+                        serviceId: item.serviceId,
+                        bookingId: booking.id,
                     }
                 })
             })
@@ -203,7 +247,7 @@ class BookingController {
                     metadata: { message: "Booking Initiated" }
                 },
             });
-            await prisma.cart.deleteMany({where:{userId:uid}})
+            await prisma.cart.deleteMany({ where: { userId: uid } })
             await logActivity({
                 userId: uid,
                 action: "Initiated Booking.",

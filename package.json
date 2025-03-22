@@ -32,7 +32,7 @@
         "@onesignal/node-onesignal": "^5.0.0-alpha-02",
         "@prisma/client": "^6.2.1",
         "bcryptjs": "^2.4.3",
-        "bitmoro": "^1.0.25",
+        "bitmoro": "^1.1.2",
         "cookie-parser": "^1.4.7",
         "cors": "^2.8.5",
         "dotenv": "^16.4.4",

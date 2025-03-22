@@ -262,12 +262,12 @@ class UserController {
         // Update the existing address
         address = await prisma.address.update({
           where: { id: existingAddress.id },
-          data: {  name, phone, street, area, city, state, landmark, location, metadata },
+          data: { name, phone, street, area, city, state, landmark, location, metadata },
         });
       } else {
         // Create a new address
         address = await prisma.address.create({
-          data: { userId: req.user.id, type:"HOME", name, phone, street, area, city, state, landmark, location, metadata },
+          data: { userId: req.user.id, type: "HOME", name, phone, street, area, city, state, landmark, location, metadata },
         });
       }
 
@@ -332,8 +332,24 @@ class UserController {
       console.error(error);
       res.status(500).json({ error: "Error fetching user" });
     }
-  } 
-// update user
+  }
+
+  // get user by id
+  @Route('get', '/:id')
+  async getUserId(req: Request, res: Response, next: NextFunction) {
+    const { id } = req.params;
+    try {
+      const user = await prisma.user.findUnique({ where: { id } });
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.status(200).json(user); // Return the user object
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error fetching user" });
+    }
+  }
+  // update user
   @Route('put', '/update', checkRole(['CUSTOMER', 'SERVICE_PROVIDER']))
   async updateUser(req: Request, res: Response, next: NextFunction) {
     const { id } = req.user;
@@ -390,8 +406,8 @@ class UserController {
   }
 
   // get all providers
-  @Route('get', '/get-all-providers')
-  async getAllProviders(req: Request, res: Response, next: NextFunction) {
+  @Route('get', '/get-all-providerrs')
+  async getAllProviderrs(req: Request, res: Response, next: NextFunction) {
     try {
       const providers = await prisma.serviceProvider.findMany({
         include: {
@@ -439,7 +455,7 @@ class UserController {
   }
 
   // get provider by id
-  @Route('get', '/get-provider-details', checkRole(['SERVICE_PROVIDER','CUSTOMER']))
+  @Route('get', '/get-provider-details', checkRole(['SERVICE_PROVIDER', 'CUSTOMER']))
   async getProviderById(req: Request, res: Response, next: NextFunction) {
     const { id } = req.user;
     try {
