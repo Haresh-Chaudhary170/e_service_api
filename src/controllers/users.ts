@@ -371,21 +371,21 @@ class UserController {
     }
   }
 
-  // // get user by id
-  // @Route('get', '/:id')
-  // async getUserId(req: Request, res: Response, next: NextFunction) {
-  //   const { id } = req.params;
-  //   try {
-  //     const user = await prisma.user.findUnique({ where: { id } });
-  //     if (!user) {
-  //       return res.status(404).json({ error: "User not found" });
-  //     }
-  //     res.status(200).json(user); // Return the user object
-  //   } catch (error) {
-  //     console.error(error);
-  //     res.status(500).json({ error: "Error fetching user" });
-  //   }
-  // }
+  // get user by id
+  @Route('get', '/id/:id')
+  async getUserId(req: Request, res: Response, next: NextFunction) {
+    const { id } = req.params;
+    try {
+      const user = await prisma.user.findUnique({ where: { id } });
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.status(200).json(user); // Return the user object
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error fetching user" });
+    }
+  }
   // update user
   @Route('put', '/update', checkRole(['CUSTOMER', 'SERVICE_PROVIDER']))
   async updateUser(req: Request, res: Response, next: NextFunction) {
@@ -448,18 +448,18 @@ class UserController {
     try {
       const providers = await prisma.serviceProvider.findMany(
         {
-        include: {
-          user: true,
-          category: true,
-          services:true
-        },
-        orderBy: {
-          user: {
-            createdAt: 'desc', // Correct ordering for user.createdAt
+          include: {
+            user: true,
+            category: true,
+            services: true
           },
-        },
-      }
-    );
+          orderBy: {
+            user: {
+              createdAt: 'desc', // Correct ordering for user.createdAt
+            },
+          },
+        }
+      );
       res.status(200).json(providers);
     } catch (error) {
       console.error(error);
@@ -495,7 +495,7 @@ class UserController {
     }
   }
 
-  
+
   @Route('get', '/get-providerss')
   async getProviderss(req: Request, res: Response, next: NextFunction) {
     try {
@@ -517,7 +517,8 @@ class UserController {
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Error fetching provider" });
-    }}
+    }
+  }
 
   // get provider by id
   @Route('get', '/get-provider-details', checkRole(['SERVICE_PROVIDER', 'CUSTOMER']))
