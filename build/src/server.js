@@ -1,13 +1,4 @@
 "use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -37,14 +28,38 @@ const bookings_1 = __importDefault(require("./controllers/bookings"));
 const reviews_1 = __importDefault(require("./controllers/reviews"));
 const payments_1 = __importDefault(require("./controllers/payments"));
 const notifications_1 = __importDefault(require("./controllers/notifications"));
+const path_1 = __importDefault(require("path"));
+const googleSignIn_1 = require("./controllers/googleSignIn");
+const express_session_1 = __importDefault(require("express-session"));
 exports.application = (0, express_1.default)();
+// Middleware
 exports.application.use(body_parser_1.default.json());
 exports.application.use((0, cookie_parser_1.default)());
-exports.application.use((0, cors_1.default)({
-    origin: ["*"],
-    credentials: true, // Allow cookies to be sent
+exports.application.use((0, express_session_1.default)({
+    secret: 'your-secret-key', // Replace with a real secret
+    resave: false,
+    saveUninitialized: true,
+    cookie: { secure: process.env.NODE_ENV === 'production' } // secure in production
 }));
-const Main = () => __awaiter(void 0, void 0, void 0, function* () {
+// CORS Configuration
+const allowedOrigins = ['http://localhost:3000', 'https://your-production-domain.com', 'http://localhost:8000'];
+exports.application.use((0, cors_1.default)({
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        }
+        else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+// Static File Serving
+const uploadsDirectory = path_1.default.resolve(__dirname, '../uploads');
+exports.application.use('/uploads', express_1.default.static(uploadsDirectory));
+const Main = async () => {
     logging.log('----------------------------------------');
     logging.log('Initializing API');
     logging.log('----------------------------------------');
@@ -71,7 +86,8 @@ const Main = () => __awaiter(void 0, void 0, void 0, function* () {
         bookings_1.default,
         reviews_1.default,
         payments_1.default,
-        notifications_1.default
+        notifications_1.default,
+        googleSignIn_1.GoogleController
     ], exports.application);
     exports.application.use(routeNotFound_1.routeNotFound);
     logging.log('----------------------------------------');
@@ -83,7 +99,7 @@ const Main = () => __awaiter(void 0, void 0, void 0, function* () {
         logging.log(`Server started on ${process.env.HOST}:${process.env.PORT}`);
         logging.log('----------------------------------------');
     });
-});
+};
 exports.Main = Main;
 const Shutdown = (callback) => exports.httpServer && exports.httpServer.close(callback);
 exports.Shutdown = Shutdown;
