@@ -85,7 +85,7 @@ let ReviewController = class ReviewController {
             }
             // check if has any bookings
             const bookings = yield prisma.booking.findMany({
-                where: { customerId: customer.id, serviceId: serviceId },
+                where: { customerId: customer.id },
             });
             if (bookings.length < 1) {
                 return res.status(403).json({ error: "You must have to book a service to give reviews." });

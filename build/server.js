@@ -37,14 +37,37 @@ const bookings_1 = __importDefault(require("./controllers/bookings"));
 const reviews_1 = __importDefault(require("./controllers/reviews"));
 const payments_1 = __importDefault(require("./controllers/payments"));
 const notifications_1 = __importDefault(require("./controllers/notifications"));
+const path_1 = __importDefault(require("path"));
+const googleSignIn_1 = require("./controllers/googleSignIn");
+const express_session_1 = __importDefault(require("express-session"));
 exports.application = (0, express_1.default)();
+// Middleware
 exports.application.use(body_parser_1.default.json());
 exports.application.use((0, cookie_parser_1.default)());
-const allowedOrigins = ['http://localhost:3000'];
-exports.application.use((0, cors_1.default)({
-    origin: ["http://localhost:3000"],
-    credentials: true, // Allow cookies to be sent
+exports.application.use((0, express_session_1.default)({
+    secret: 'your-secret-key', // Replace with a real secret
+    resave: false,
+    saveUninitialized: true,
+    cookie: { secure: process.env.NODE_ENV === 'production' } // secure in production
 }));
+// CORS Configuration
+const allowedOrigins = ['http://localhost:3000', 'https://your-production-domain.com', 'http://localhost:8000'];
+exports.application.use((0, cors_1.default)({
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        }
+        else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+// Static File Serving
+const uploadsDirectory = path_1.default.resolve(__dirname, '../uploads');
+exports.application.use('/uploads', express_1.default.static(uploadsDirectory));
 const Main = () => __awaiter(void 0, void 0, void 0, function* () {
     logging.log('----------------------------------------');
     logging.log('Initializing API');
@@ -72,7 +95,8 @@ const Main = () => __awaiter(void 0, void 0, void 0, function* () {
         bookings_1.default,
         reviews_1.default,
         payments_1.default,
-        notifications_1.default
+        notifications_1.default,
+        googleSignIn_1.GoogleController
     ], exports.application);
     exports.application.use(routeNotFound_1.routeNotFound);
     logging.log('----------------------------------------');

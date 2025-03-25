@@ -33,14 +33,12 @@ exports.providerDocumentSchema = zod_1.default.object({
     metadata: zod_1.default.string().optional(),
 });
 exports.addressSchema = zod_1.default.object({
-    userId: zod_1.default.string(),
-    type: zod_1.default.enum(['HOME', 'OFFICE', 'OTHER']),
-    name: zod_1.default.string().min(1, 'Address label is required'),
+    name: zod_1.default.string().min(1, 'Name is required'),
+    phone: zod_1.default.string().min(1, 'Phone is required'),
     street: zod_1.default.string().min(1, 'Street address is required'),
     area: zod_1.default.string().optional(),
     city: zod_1.default.string().min(1, 'City is required'),
     state: zod_1.default.string().min(1, 'State is required'),
-    zipCode: zod_1.default.string().optional(),
     landmark: zod_1.default.string().optional(),
     location: zod_1.default.string(),
     metadata: zod_1.default.unknown().optional()

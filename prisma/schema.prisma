@@ -80,23 +80,59 @@ enum OTPType {
 }
 
 // ------Models------
+// model User {
+//   id            String     @id @default(cuid())
+//   email         String     @unique
+//   phone         String?    @unique
+//   password      String
+//   role          UserRole
+//   firstName     String
+//   lastName      String
+//   avatar        String?
+//   status        UserStatus @default(PENDING_VERIFICATION)
+//   emailVerified Boolean    @default(false)
+//   phoneVerified Boolean    @default(false)
+//   address       Address[]
+//   createdAt     DateTime   @default(now())
+//   updatedAt     DateTime   @updatedAt
+//   lastLoginAt   DateTime?
+//   lastLoginIp   String?
+
+//   // Role-specific relations
+//   customerProfile Customer?
+//   providerProfile ServiceProvider?
+//   // adminProfile      Admin?
+
+//   // Common relations
+//   notifications Notification[]
+//   reviews       Review[]       @relation("ReviewAuthor")
+//   messages      Message[]
+//   flags         UserFlag[]
+//   activityLogs  ActivityLog[]
+//   otp           OTP[]
+//   carts         Cart[]
+// }
+
 model User {
-  id            String     @id @default(cuid())
-  email         String     @unique
-  phone         String?    @unique
-  password      String
-  role          UserRole
-  firstName     String
-  lastName      String
-  avatar        String?
-  status        UserStatus @default(PENDING_VERIFICATION)
-  emailVerified Boolean    @default(false)
-  phoneVerified Boolean    @default(false)
-  address       Address[]
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  lastLoginAt   DateTime?
-  lastLoginIp   String?
+  id               String     @id @default(cuid())
+  email            String     @unique
+  phone            String?    @unique
+  password         String?    // Make password optional for Google Sign-In
+  googleId         String?    @unique // Add this field for Google Sign-In
+  googleAccessToken String?   // Store the Google OAuth access token
+  googleRefreshToken String?  // Store the Google OAuth refresh token
+  role             UserRole
+  firstName        String
+  lastName         String
+  avatar           String?
+  status           UserStatus @default(PENDING_VERIFICATION)
+  emailVerified    Boolean    @default(false)
+  phoneVerified    Boolean    @default(false)
+  address          Address[]
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  lastLoginAt      DateTime?
+  lastLoginIp      String?
 
   // Role-specific relations
   customerProfile Customer?
@@ -112,7 +148,6 @@ model User {
   otp           OTP[]
   carts         Cart[]
 }
-
 model UserFlag {
   id          String     @id @default(cuid())
   user        User       @relation(fields: [userId], references: [id])

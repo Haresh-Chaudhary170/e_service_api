@@ -44,23 +44,27 @@ let CartController = class CartController {
     }
     getCarts(req, res, next) {
         return __awaiter(this, void 0, void 0, function* () {
+            const providerId = req.params.provider;
             try {
-                // Get all categories where isActive is true and sorted boy displayOrder
-                const categories = yield prisma.cart.findMany({
-                    where: { userId: req.user.id },
+                // Get all carts where isActive is true and sorted boy displayOrder
+                const carts = yield prisma.cart.findMany({
+                    where: { userId: req.user.id, providerId },
+                    include: {
+                        service: true
+                    },
                     orderBy: { createdAt: 'desc' },
                 });
-                res.status(200).json(categories);
+                res.status(200).json(carts);
             }
             catch (error) {
                 console.error(error);
-                res.status(500).json({ error: "Error fetching categories" });
+                res.status(500).json({ error: "Error fetching carts" });
             }
         });
     }
     addToCart(req, res, next) {
         return __awaiter(this, void 0, void 0, function* () {
-            const { serviceId, quantity } = req.body;
+            const { serviceId, quantity, providerId } = req.body;
             // check if the quantity is non nagative
             if (quantity < 1) {
                 return res.status(400).json({ error: "Quantity should not be less than 1" });
@@ -73,21 +77,18 @@ let CartController = class CartController {
                     },
                 });
                 if (existingCartItem) {
-                    res.status(200).json({
-                        message: "Service already in cart",
-                        cart: existingCartItem,
+                    return res.status(400).json({
+                        error: "Service already in cart",
                     });
                 }
-                else {
-                    const cartItem = yield prisma.cart.create({
-                        data: { userId: req.user.id, serviceId, quantity: parseInt(quantity) },
-                    });
-                    res.status(200).json({ cartItem, message: "Service added to cart" });
-                }
+                const cartItem = yield prisma.cart.create({
+                    data: { userId: req.user.id, serviceId, quantity: parseInt(quantity), providerId },
+                });
+                return res.status(200).json({ cartItem, message: "Service added to cart" });
             }
             catch (error) {
                 console.log(error);
-                res.status(500).json({ error: "Error adding service to cart" });
+                return res.status(500).json({ error: "Error adding service to cart" });
             }
         });
     }
@@ -138,7 +139,7 @@ __decorate([
     (0, route_1.Route)('get', '/get-all-admin', (0, authMiddleware_1.checkRole)(['ADMIN']))
 ], CartController.prototype, "getCartsAdmin", null);
 __decorate([
-    (0, route_1.Route)('get', '/get', (0, authMiddleware_1.checkRole)(['CUSTOMER']))
+    (0, route_1.Route)('get', '/get/:provider', (0, authMiddleware_1.checkRole)(['CUSTOMER']))
 ], CartController.prototype, "getCarts", null);
 __decorate([
     (0, route_1.Route)('post', '/add', (0, authMiddleware_1.checkRole)(['CUSTOMER']))
@@ -147,7 +148,7 @@ __decorate([
     (0, route_1.Route)('put', '/update/:cartId', (0, authMiddleware_1.checkRole)(['CUSTOMER'])) // Use the middleware here
 ], CartController.prototype, "updateCart", null);
 __decorate([
-    (0, route_1.Route)('delete', '/delete/:id')
+    (0, route_1.Route)('delete', '/delete/:id', (0, authMiddleware_1.checkRole)(['CUSTOMER']))
 ], CartController.prototype, "deleteCart", null);
 CartController = __decorate([
     (0, controller_1.Controller)('/api/carts')

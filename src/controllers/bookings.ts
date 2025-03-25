@@ -7,6 +7,7 @@ import { checkRole } from "../middleware/authMiddleware";
 import { bookingValidationSchema } from "../validators/bookingValidator";
 import { logActivity } from "../library/activityLogger";
 import { NotificationService } from "../library/notificationService";
+import { createGoogleCalendarEvent } from "../services/googleCalendar";
 
 const prisma = new PrismaClient();
 
@@ -118,7 +119,7 @@ class BookingController {
                 }
             })
 
-            res.status(200).json({booking, nessage:"Status changed successfully."});
+            res.status(200).json({ booking, nessage: "Status changed successfully." });
         } catch (error) {
             console.error("Error fetching booking:", error);
             res.status(500).json({ error: "Error fetching booking" });
@@ -161,13 +162,118 @@ class BookingController {
         }
     }
 
+    // // Create a booking
+    // @Route("post", "/", checkRole(["CUSTOMER"]))
+    // @Validate(bookingValidationSchema)
+    // async createBooking(req: Request, res: Response, next: NextFunction) {
+    //     const uid = req.user.id;
+
+    //     // get user with id
+    //     const user = await prisma.user.findUnique({
+    //         where: { id: uid },
+    //     });
+
+    //     if (!user) {
+    //         return res.status(401).json({ error: "Unauthorized" });
+    //     }
+    //     // check if email is verified
+    //     if (!user.emailVerified) {
+    //         return res.status(401).json({ error: "Email not verified. Please verify your email first." });
+    //     }
+    //     // // check if phone is verified
+    //     // if (user.phoneVerified) {
+    //     //     return res.status(401).json({ error: "Phone number not verified. Please verify your phone number first." });
+    //     // }
+    //     // check if the user is customer
+    //     const customer = await prisma.customer.findUnique({
+    //         where: { userId: uid },
+    //     })
+
+    //     if (!customer) {
+    //         return res.status(401).json({ error: "You are not a customer. Only customers can create bookings." });
+    //     }
+
+    //     const {
+    //         providerId,
+    //         addressId,
+    //         type,
+    //         paymentMethod,
+    //         scheduledDate,
+    //         scheduleStartTime,
+    //         scheduleEndTime,
+    //         totalAmount,
+    //         notes,
+    //     } = req.body;
+
+    //     // check if provider exists
+    //     const provider = await prisma.serviceProvider.findUnique({
+    //         where: { id: providerId },
+    //     });
+    //     if (!provider) {
+    //         return res.status(404).json({ error: "Provider not found" });
+    //     }
+    //     try {
+    //         const booking = await prisma.booking.create({
+    //             data: {
+    //                 customerId: customer.id,
+    //                 addressId,
+    //                 type,
+    //                 paymentMethod,
+    //                 providerId,
+    //                 scheduledDate: new Date(scheduledDate),
+    //                 scheduleStartTime,
+    //                 scheduleEndTime,
+    //                 totalAmount: parseFloat(totalAmount),
+    //                 notes,
+    //             },
+    //         });
+    //         const cartItems = await prisma.cart.findMany({ where: { userId: uid } });
+    //         cartItems.map(async (item) => {
+    //             await prisma.bookedItem.create({
+    //                 data: {
+    //                     serviceId: item.serviceId,
+    //                     bookingId: booking.id,
+    //                 }
+    //             })
+    //         })
+    //         // add to serviceTrackingLog
+    //         await prisma.serviceTrackingLog.create({
+    //             data: {
+    //                 bookingId: booking.id,
+    //                 status: "PENDING",
+    //                 metadata: { message: "Booking Initiated" }
+    //             },
+    //         });
+    //         await prisma.cart.deleteMany({ where: { userId: uid } })
+    //         await logActivity({
+    //             userId: uid,
+    //             action: "Initiated Booking.",
+    //             entity: "booking",
+    //             entityId: booking.id,
+    //             details: booking,
+    //         })
+    //         // Send notification
+    //         await NotificationService.createNotification({
+    //             userId: req.user.id,
+    //             title: "Booking Confirmed",
+    //             message: "Your booking has been successfully confirmed.",
+    //             type: "BOOKING",
+    //         });
+    //         res.status(200).json(booking);
+    //     } catch (error) {
+    //         console.error("Error creating booking:", error);
+    //         res.status(500).json({ error: "Error creating booking" });
+    //     }
+    // }
+
+
     // Create a booking
     @Route("post", "/", checkRole(["CUSTOMER"]))
     @Validate(bookingValidationSchema)
     async createBooking(req: Request, res: Response, next: NextFunction) {
         const uid = req.user.id;
 
-        // get user with id
+        // Get user with id
         const user = await prisma.user.findUnique({
             where: { id: uid },
         });
@@ -175,18 +281,16 @@ class BookingController {
         if (!user) {
             return res.status(401).json({ error: "Unauthorized" });
         }
-        // check if email is verified
-        // if (user.emailVerified) {
-        //     return res.status(401).json({ error: "Email not verified. Please verify your email first." });
-        // }
-        // // check if phone is verified
-        // if (user.phoneVerified) {
-        //     return res.status(401).json({ error: "Phone number not verified. Please verify your phone number first." });
-        // }
-        // check if the user is customer
+
+        // Check if email is verified
+        if (!user.emailVerified) {
+            return res.status(401).json({ error: "Email not verified. Please verify your email first." });
+        }
+
+        // Check if the user is a customer
         const customer = await prisma.customer.findUnique({
             where: { userId: uid },
-        })
+        });
 
         if (!customer) {
             return res.status(401).json({ error: "You are not a customer. Only customers can create bookings." });
@@ -204,18 +308,16 @@ class BookingController {
             notes,
         } = req.body;
 
-        // check if provider exists
+        // Check if provider exists
         const provider = await prisma.serviceProvider.findUnique({
             where: { id: providerId },
         });
-
         if (!provider) {
             return res.status(404).json({ error: "Provider not found" });
         }
 
-
-
         try {
+            // Create the booking
             const booking = await prisma.booking.create({
                 data: {
                     customerId: customer.id,
@@ -230,31 +332,39 @@ class BookingController {
                     notes,
                 },
             });
+            console.log(booking)
+            // Add booked items
             const cartItems = await prisma.cart.findMany({ where: { userId: uid } });
             cartItems.map(async (item) => {
                 await prisma.bookedItem.create({
                     data: {
                         serviceId: item.serviceId,
                         bookingId: booking.id,
-                    }
-                })
-            })
-            // add to serviceTrackingLog
+                    },
+                });
+            });
+
+            // Add to serviceTrackingLog
             await prisma.serviceTrackingLog.create({
                 data: {
                     bookingId: booking.id,
                     status: "PENDING",
-                    metadata: { message: "Booking Initiated" }
+                    metadata: { message: "Booking Initiated" },
                 },
             });
-            await prisma.cart.deleteMany({ where: { userId: uid } })
+
+            // Clear the cart
+            await prisma.cart.deleteMany({ where: { userId: uid } });
+
+            // Log activity
             await logActivity({
                 userId: uid,
                 action: "Initiated Booking.",
                 entity: "booking",
                 entityId: booking.id,
                 details: booking,
-            })
+            });
+
             // Send notification
             await NotificationService.createNotification({
                 userId: req.user.id,
@@ -262,6 +372,50 @@ class BookingController {
                 message: "Your booking has been successfully confirmed.",
                 type: "BOOKING",
             });
+
+            // Get user's Google tokens from the database
+            const userGoogleCredentials = await prisma.user.findUnique({
+                where: { id: uid },
+                select: {
+                    googleAccessToken: true,
+                },
+            });
+
+            if (!userGoogleCredentials || !userGoogleCredentials.googleAccessToken) {
+                return res.status(400).json({ error: 'No Google tokens found for this user.' });
+            }
+
+
+            // Function to parse time string (e.g., "12:00 PM") to hours and minutes
+            const parseTimeString = (timeStr: string) => {
+                const [time, period] = timeStr.split(' ');
+                let [hours, minutes] = time.split(':').map(Number);
+
+                if (period === 'PM' && hours < 12) hours += 12;
+                if (period === 'AM' && hours === 12) hours = 0;
+
+                return { hours, minutes };
+            };
+
+            // Get start and end times
+            const { hours: startHours, minutes: startMinutes } = parseTimeString(scheduleStartTime);
+            const { hours: endHours, minutes: endMinutes } = parseTimeString(scheduleEndTime);
+
+            // Create Date objects combining the date and time
+            const startDateTime = new Date(scheduledDate);
+            startDateTime.setHours(startHours, startMinutes, 0, 0);
+
+            const endDateTime = new Date(scheduledDate);
+            endDateTime.setHours(endHours, endMinutes, 0, 0);
+
+            // Now use these in your calendar function
+            await createGoogleCalendarEvent(
+                userGoogleCredentials.googleAccessToken,
+                `Booking with ${provider.businessName}`,
+                `Booking ID: ${booking.id}\nCustomer: ${user.firstName} ${user.lastName}\nServices: ${cartItems.map(item => item.serviceId).join(", ")}`,
+                startDateTime.toISOString(),
+                endDateTime.toISOString()
+            );
             res.status(200).json(booking);
         } catch (error) {
             console.error("Error creating booking:", error);

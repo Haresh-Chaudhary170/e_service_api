@@ -1,12 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
-import bcrypt from "bcryptjs";
 import { Controller } from '../decorators/controller';
+import bcrypt from "bcryptjs";
 import { Route } from '../decorators/route';
 import { Validate } from '../decorators/validator';
 import { z } from 'zod';
 import jwt from 'jsonwebtoken';
 import { Bitmoro } from 'bitmoro';
 
+import { google } from 'googleapis';
 
 import { PrismaClient } from "@prisma/client";
 import { OtpService } from '../services/otpService';
@@ -14,13 +15,21 @@ import { EmailService } from '../services/emailService';
 import otpEmailTemplate from '../templates/email_templates';
 import { logActivity } from '../library/activityLogger';
 const prisma = new PrismaClient();
+import { OAuth2Client } from 'google-auth-library';
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 type BitmoroOtpResponse = {
     numberOfFailed: number;
 }
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "1h";
-
+const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI
+);
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const userValidationSchema = z.object({
     email: z.string().email("Invalid email format"),
     password: z.string().min(6, "Password must be at least 6 characters"),
@@ -30,6 +39,246 @@ const emailValidationSchema = z.object({
 });
 @Controller('/api')
 class AuthController {
+
+
+
+@Route('post', '/google-signin')
+async signinWithGoogle(req: Request, res: Response, next: NextFunction) {
+    const { code } = req.body; // Now expecting an authorization code instead of idToken
+
+    try {
+        if (!code) {
+            return res.status(400).json({ error: 'Authorization code is required' });
+        }
+
+        // Exchange authorization code for tokens
+        const { tokens } = await oauth2Client.getToken(code);
+        if (!tokens.id_token || !tokens.access_token) {
+            return res.status(401).json({ error: 'Failed to retrieve tokens from Google' });
+        }
+
+        // Verify the ID token
+        const ticket = await oauth2Client.verifyIdToken({
+            idToken: tokens.id_token,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+
+        const payload = ticket.getPayload();
+        if (!payload) {
+            return res.status(401).json({ error: 'Invalid Google token' });
+        }
+
+        const { sub: googleId, email, given_name, family_name, picture } = payload;
+
+        if (!email) {
+            return res.status(400).json({ error: 'Email is required from Google' });
+        }
+
+        // Check for existing user by either googleId or email
+        let user = await prisma.user.findFirst({
+            where: {
+                OR: [{ googleId }, { email }],
+            },
+        });
+
+        // If user exists but googleId is missing, update it
+        if (user && !user.googleId) {
+            user = await prisma.user.update({
+                where: { email },
+                data: {
+                    googleId,
+                    googleAccessToken: tokens.access_token,
+                    googleRefreshToken: tokens.refresh_token || null,
+                    // googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null
+                },
+            });
+        }
+
+        // If user doesn't exist, create a new one
+        if (!user) {
+            user = await prisma.user.create({
+                data: {
+                    googleId,
+                    email,
+                    firstName: given_name || '',
+                    lastName: family_name || '',
+                    avatar: picture || '',
+                    role: 'CUSTOMER',
+                    emailVerified: true,
+                    status: 'ACTIVE',
+                    googleAccessToken: tokens.access_token,
+                    googleRefreshToken: tokens.refresh_token || null,
+                    // googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null
+                },
+            });
+
+            await logActivity({
+                userId: user.id,
+                action: 'Google Sign-Up',
+                entity: 'User',
+                entityId: user.id,
+                details: { email },
+                req,
+            });
+        } else {
+            // Update tokens for existing user
+            user = await prisma.user.update({
+                where: { id: user.id },
+                data: {
+                    googleAccessToken: tokens.access_token,
+                    googleRefreshToken: tokens.refresh_token || null,
+                    // googleTokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null
+                },
+            });
+
+            await logActivity({
+                userId: user.id,
+                action: 'Google Sign-In',
+                entity: 'User',
+                entityId: user.id,
+                details: { email },
+                req,
+            });
+        }
+
+        // Create JWT token
+        const token = jwt.sign(
+            { id: user.id, email: user.email, role: user.role },
+            process.env.JWT_SECRET as string,
+            { expiresIn: process.env.JWT_EXPIRES_IN || '1h' }
+        );
+
+        // Set cookie with JWT token
+        res.cookie('token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 60 * 60 * 1000, // 1 hour
+            path: '/',
+        });
+
+        res.json({
+            message: user.googleId ? 'Google Sign-In successful' : 'Google Sign-Up successful',
+            user: {
+                firstName: user.firstName,
+                lastName: user.lastName,
+                email: user.email,
+                role: user.role,
+            },
+            googleAccessToken: tokens.access_token, // Optionally send this to frontend if needed immediately
+        });
+    } catch (error) {
+        console.error('Google Sign-In Error:', error);
+        res.status(500).json({ error: 'Error during Google Sign-In' });
+    }
+}
+
+    // @Route('post', '/google-signin')
+    // async signinWithGoogle(req: Request, res: Response, next: NextFunction) {
+    //     const { idToken } = req.body;
+
+    //     try {
+    //         if (!idToken) {
+    //             return res.status(400).json({ error: 'ID token is required' });
+    //         }
+
+    //         // Verify the Google ID token
+    //         const ticket = await client.verifyIdToken({
+    //             idToken,
+    //             audience: process.env.GOOGLE_CLIENT_ID,
+    //         });
+
+    //         const payload = ticket.getPayload();
+    //         if (!payload) {
+    //             return res.status(401).json({ error: 'Invalid Google token' });
+    //         }
+
+    //         const { sub: googleId, email, given_name, family_name, picture } = payload;
+
+    //         if (!email) {
+    //             return res.status(400).json({ error: 'Email is required from Google' });
+    //         }
+
+    //         // Check for existing user by either googleId or email
+    //         let user = await prisma.user.findFirst({
+    //             where: {
+    //                 OR: [{ googleId }, { email }],
+    //             },
+    //         });
+
+    //         // If user exists but googleId is missing, update it
+    //         if (user && !user.googleId) {
+    //             user = await prisma.user.update({
+    //                 where: { email },
+    //                 data: { googleId },
+    //             });
+    //         }
+
+    //         // If user doesn't exist, create a new one
+    //         if (!user) {
+    //             user = await prisma.user.create({
+    //                 data: {
+    //                     googleId,
+    //                     email,
+    //                     firstName: given_name || '',
+    //                     lastName: family_name || '',
+    //                     avatar: picture || '',
+    //                     role: 'CUSTOMER',
+    //                     emailVerified: true,
+    //                     status: 'ACTIVE',
+    //                 },
+    //             });
+
+    //             await logActivity({
+    //                 userId: user.id,
+    //                 action: 'Google Sign-Up',
+    //                 entity: 'User',
+    //                 entityId: user.id,
+    //                 details: { email },
+    //                 req,
+    //             });
+    //         } else {
+    //             await logActivity({
+    //                 userId: user.id,
+    //                 action: 'Google Sign-In',
+    //                 entity: 'User',
+    //                 entityId: user.id,
+    //                 details: { email },
+    //                 req,
+    //             });
+    //         }
+
+    //         // Create JWT token
+    //         const token = jwt.sign(
+    //             { id: user.id, email: user.email, role: user.role },
+    //             process.env.JWT_SECRET as string,
+    //             { expiresIn: process.env.JWT_EXPIRES_IN || '1h' }
+    //         );
+
+    //         // Set cookie with JWT token
+    //         res.cookie('token', token, {
+    //             httpOnly: true,
+    //             secure: process.env.NODE_ENV === 'production',
+    //             sameSite: 'lax',
+    //             maxAge: 60 * 60 * 1000, // 1 hour
+    //             path: '/',
+    //         });
+
+    //         res.json({
+    //             message: user.googleId ? 'Google Sign-In successful' : 'Google Sign-Up successful',
+    //             user: {
+    //                 firstName: user.firstName,
+    //                 lastName: user.lastName,
+    //                 email: user.email,
+    //                 role: user.role,
+    //             },
+    //         });
+    //     } catch (error) {
+    //         console.error('Google Sign-In Error:', error);
+    //         res.status(500).json({ error: 'Error during Google Sign-In' });
+    //     }
+    // }
+
 
     @Route('post', '/login')
     @Validate(userValidationSchema) // Validation on the request body
@@ -48,7 +297,7 @@ class AuthController {
             }
 
             // Validate the password
-            const isPasswordValid = await bcrypt.compare(password, user.password);
+            const isPasswordValid = user?.password ? await bcrypt.compare(password, user.password) : false;
 
             if (!isPasswordValid) {
                 return res.status(401).json({ error: "Email or password is incorret!" });
@@ -90,6 +339,8 @@ class AuthController {
             return res.status(500).json({ error: "Error logging in" });
         }
     }
+
+
 
     @Route('post', '/logout')
     async logout(req: Request, res: Response, next: NextFunction): Promise<void> {

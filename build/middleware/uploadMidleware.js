@@ -11,9 +11,11 @@ const fs_1 = __importDefault(require("fs"));
 const storage = multer_1.default.diskStorage({
     destination: (req, file, cb) => {
         const { providerId, type, name } = req.body;
+        console.log(type);
         if (!type) {
             return cb(new Error('Type is required to determine upload path'), '');
         }
+        // const providerId = req.user.providerId;
         let uploadPath = '';
         if (providerId) {
             uploadPath = path_1.default.join('uploads', name || 'default', // Default if no name is provided
@@ -39,7 +41,7 @@ const storage = multer_1.default.diskStorage({
 });
 // File filter for images
 const fileFilter = (req, file, cb) => {
-    const fileTypes = /jpeg|jpg|png/;
+    const fileTypes = /jpeg|jpg|png|webp/;
     const extName = fileTypes.test(path_1.default.extname(file.originalname).toLowerCase());
     const mimeType = fileTypes.test(file.mimetype);
     if (extName && mimeType) {

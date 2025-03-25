@@ -14,6 +14,9 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 const controller_1 = require("../decorators/controller");
 const route_1 = require("../decorators/route");
@@ -23,6 +26,8 @@ const client_1 = require("@prisma/client");
 const authMiddleware_1 = require("../middleware/authMiddleware");
 const uploadMidleware_1 = require("../middleware/uploadMidleware");
 const activityLogger_1 = require("../library/activityLogger");
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 const prisma = new client_1.PrismaClient();
 const categoryValidationSchema = zod_1.z.object({
     name: zod_1.z.string().min(1, 'Name is required'),
@@ -35,13 +40,34 @@ let CategoryController = class CategoryController {
     getCategoriesAdmin(req, res, next) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
-                // Get all categories sorted by displayOrder
-                const categories = yield prisma.category.findMany({ orderBy: { displayOrder: 'asc' } });
-                res.status(200).json(categories);
+                const { search, limit = 10, page = 1 } = req.query;
+                // Building filters dynamically based on the query params
+                const where = {
+                    isActive: true, // Keep only active categories
+                };
+                // If 'search' query parameter exists, add a search filter
+                if (search) {
+                    where.name = {
+                        contains: search,
+                        mode: 'insensitive', // Case insensitive search
+                    };
+                }
+                // Get categories with pagination (limit and page)
+                const categories = yield prisma.category.findMany({
+                    where,
+                    skip: (parseInt(page) - 1) * parseInt(limit), // Pagination
+                    take: parseInt(limit), // Limit the number of results
+                    orderBy: { createdAt: 'desc' }, // Order by most recent first
+                });
+                // Count total active categories matching the filters
+                const total_categories = yield prisma.category.count({
+                    where,
+                });
+                res.status(200).json({ categories, total_categories });
             }
             catch (error) {
                 console.error(error);
-                res.status(500).json({ error: "Error fetching categories" });
+                res.status(500).json({ error: 'Error fetching categories' });
             }
         });
     }
@@ -104,6 +130,11 @@ let CategoryController = class CategoryController {
                 return res.status(400).json({ error: "Name is required" });
             }
             try {
+                // Check if the category exists
+                const existingCategory = yield prisma.category.findUnique({ where: { id } });
+                if (!existingCategory) {
+                    return res.status(404).json({ error: "Category not found" });
+                }
                 const data = {
                     name,
                     nameNp,
@@ -113,6 +144,11 @@ let CategoryController = class CategoryController {
                     parentId,
                 };
                 if (image) {
+                    // Delete existing image if it exists
+                    const filePath = existingCategory.image ? path_1.default.join(__dirname, '../../', existingCategory.image) : '';
+                    if (fs_1.default.existsSync(filePath)) {
+                        fs_1.default.unlinkSync(filePath); // Deletes the file
+                    }
                     data.image = `${image.destination}/${image.filename}`;
                 }
                 const category = yield prisma.category.update({
@@ -139,6 +175,17 @@ let CategoryController = class CategoryController {
         return __awaiter(this, void 0, void 0, function* () {
             const { id } = req.params;
             try {
+                // Check if the category exists
+                const existingCategory = yield prisma.category.findUnique({ where: { id } });
+                if (!existingCategory) {
+                    return res.status(404).json({ error: "Category not found" });
+                }
+                // Delete existing image if it exists
+                const filePath = existingCategory.image ? path_1.default.join(__dirname, '../../', existingCategory.image) : '';
+                if (fs_1.default.existsSync(filePath)) {
+                    fs_1.default.unlinkSync(filePath); // Deletes the file
+                }
+                // Delete the category from the database
                 yield prisma.category.delete({ where: { id } });
                 yield (0, activityLogger_1.logActivity)({
                     userId: req.user.id,
@@ -178,14 +225,14 @@ __decorate([
     (0, route_1.Route)('get', '/get-all')
 ], CategoryController.prototype, "getCategories", null);
 __decorate([
-    (0, route_1.Route)('post', '/add', (0, authMiddleware_1.checkRole)(['ADMIN']), uploadMidleware_1.singleUploadMiddleware),
+    (0, route_1.Route)('post', '/add', (0, authMiddleware_1.checkRole)(['SERVICE_PROVIDER']), uploadMidleware_1.singleUploadMiddleware),
     (0, validator_1.Validate)(categoryValidationSchema)
 ], CategoryController.prototype, "addCategory", null);
 __decorate([
-    (0, route_1.Route)('put', '/update/:id', uploadMidleware_1.singleUploadMiddleware) // Use the middleware here
+    (0, route_1.Route)('put', '/update/:id', (0, authMiddleware_1.checkRole)(['SERVICE_PROVIDER']), uploadMidleware_1.singleUploadMiddleware) // Use the middleware here
 ], CategoryController.prototype, "updateCategory", null);
 __decorate([
-    (0, route_1.Route)('delete', '/delete/:id')
+    (0, route_1.Route)('delete', '/delete/:id', (0, authMiddleware_1.checkRole)(['SERVICE_PROVIDER']))
 ], CategoryController.prototype, "deleteCategory", null);
 __decorate([
     (0, route_1.Route)('get', '/get-single/:id')

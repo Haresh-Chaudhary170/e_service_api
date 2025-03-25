@@ -26,16 +26,23 @@ import ReviewController from './controllers/reviews';
 import PaymentController from './controllers/payments';
 import NotificationController from './controllers/notifications';
 import path from 'path';
-
+import { GoogleController } from './controllers/googleSignIn';
+import session from 'express-session';
+ 
 export const application = express();
 export let httpServer: ReturnType<typeof http.createServer>;
 
 // Middleware
 application.use(bodyParser.json());
 application.use(cookieParser());
-
+application.use(session({
+    secret: 'your-secret-key', // Replace with a real secret
+    resave: false,
+    saveUninitialized: true,
+    cookie: { secure: process.env.NODE_ENV === 'production' } // secure in production
+}));
 // CORS Configuration
-const allowedOrigins = ['http://localhost:3000', 'https://your-production-domain.com'];
+const allowedOrigins = ['http://localhost:3000', 'https://your-production-domain.com', 'http://localhost:8000'];
 
 application.use(cors({
     origin: (origin, callback) => {
@@ -83,7 +90,8 @@ export const Main = async () => {
         BookingController,
         ReviewController,
         PaymentController,
-        NotificationController
+        NotificationController,
+        GoogleController
     ], application);
 
     application.use(routeNotFound);

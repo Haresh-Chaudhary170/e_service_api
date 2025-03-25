@@ -24,78 +24,233 @@ const activityLogger_1 = require("../library/activityLogger");
 const calendarValidator_1 = require("../validators/calendarValidator");
 const prisma = new client_1.PrismaClient();
 let ServiceProviderController = class ServiceProviderController {
-    // add service area
+    // add or update service area
     uploadAddress(req, res, next) {
         return __awaiter(this, void 0, void 0, function* () {
             const { name, polygon } = req.body;
-            // check if provider exist
+            // check if provider exists
             const existingProvider = yield prisma.serviceProvider.findUnique({ where: { userId: req.user.id } });
             if (!existingProvider) {
                 return res.status(404).json({ error: "Service Provider not found" });
             }
             try {
-                const serviceArea = yield prisma.serviceArea.create({
-                    data: {
-                        name,
-                        polygon,
-                        providerId: existingProvider.id,
+                // Use findFirst instead of findUnique to handle non-unique providerId
+                const existingServiceArea = yield prisma.serviceArea.findFirst({
+                    where: {
+                        providerId: existingProvider.id, // Checking if a service area exists for the provider
                     },
                 });
-                yield (0, activityLogger_1.logActivity)({
-                    userId: req.user.id,
-                    action: "Service Area Added.",
-                    entity: "serviceArea",
-                    entityId: serviceArea.id,
-                    details: { name },
-                    req,
-                });
-                res.status(200).json({
-                    serviceArea,
-                    message: "Service area created successfully",
-                });
+                let serviceArea;
+                if (existingServiceArea) {
+                    // If the service area exists, update it
+                    serviceArea = yield prisma.serviceArea.update({
+                        where: {
+                            id: existingServiceArea.id, // Use the existing service area's ID for the update
+                        },
+                        data: {
+                            name, // Update the name
+                            polygon, // Update the polygon
+                        },
+                    });
+                    // Log activity for update
+                    yield (0, activityLogger_1.logActivity)({
+                        userId: req.user.id,
+                        action: "Service Area Updated",
+                        entity: "serviceArea",
+                        entityId: serviceArea.id,
+                        details: { name },
+                        req,
+                    });
+                    res.status(200).json({
+                        serviceArea,
+                        message: "Service area updated successfully",
+                    });
+                }
+                else {
+                    // If the service area doesn't exist, create it
+                    serviceArea = yield prisma.serviceArea.create({
+                        data: {
+                            name, // Create with the new name
+                            polygon, // Create with the new polygon
+                            providerId: existingProvider.id,
+                        },
+                    });
+                    // Log activity for creation
+                    yield (0, activityLogger_1.logActivity)({
+                        userId: req.user.id,
+                        action: "Service Area Added",
+                        entity: "serviceArea",
+                        entityId: serviceArea.id,
+                        details: { name },
+                        req,
+                    });
+                    res.status(200).json({
+                        serviceArea,
+                        message: "Service area created successfully",
+                    });
+                }
             }
             catch (error) {
                 console.error(error);
-                res.status(500).json({ error: "Error creating service area" });
+                res.status(500).json({ error: "Error creating or updating service area" });
             }
         });
     }
-    // add working hours
-    addWorkingHours(req, res, next) {
+    // get service area
+    getServiceAreas(req, res, next) {
         return __awaiter(this, void 0, void 0, function* () {
-            const { dayOfWeek, startTime, endTime, breakStart, breakEnd } = req.body;
             // check if provider exist
             const existingProvider = yield prisma.serviceProvider.findUnique({ where: { userId: req.user.id } });
             if (!existingProvider) {
                 return res.status(404).json({ error: "Service Provider not found" });
             }
             try {
-                const workingHours = yield prisma.workingHours.create({
-                    data: {
-                        dayOfWeek,
-                        startTime,
-                        endTime,
-                        breakStart,
-                        breakEnd,
+                const serviceAreas = yield prisma.serviceArea.findFirst({
+                    where: {
                         providerId: existingProvider.id,
                     },
                 });
-                yield (0, activityLogger_1.logActivity)({
-                    userId: req.user.id,
-                    action: "Working Hours Added.",
-                    entity: "workingHours",
-                    entityId: workingHours.id,
-                    details: { dayOfWeek, startTime, endTime, breakStart, breakEnd },
-                    req,
-                });
+                // get service area count
+                // const total_serviceAreas = await prisma.serviceArea.count({
+                //     where: {
+                //         providerId: existingProvider.id,
+                //     },
+                // });
                 res.status(200).json({
-                    workingHours,
-                    message: "Working hours created successfully",
+                    serviceAreas,
+                    // total_serviceAreas,
+                    message: "Service areas retrieved successfully",
                 });
             }
             catch (error) {
                 console.error(error);
-                res.status(500).json({ error: "Error creating working hours" });
+                res.status(500).json({ error: "Error retrieving service areas" });
+            }
+        });
+    }
+    // // add working hours
+    // @Route('post', '/add-working-hours', checkRole(['SERVICE_PROVIDER']))
+    // @Validate(workingHoursSchema)
+    // async addWorkingHours(req: Request, res: Response, next: NextFunction) {
+    //     const { dayOfWeek, startTime, endTime, breakStart, breakEnd } = req.body;
+    //     // check if provider exist
+    //     const existingProvider = await prisma.serviceProvider.findUnique({ where: { userId: req.user.id } });
+    //     if (!existingProvider) {
+    //         return res.status(404).json({ error: "Service Provider not found" });
+    //     }
+    //     try {
+    //         const workingHours = await prisma.workingHours.create({
+    //             data: {
+    //                 dayOfWeek,
+    //                 startTime,
+    //                 endTime,
+    //                 breakStart,
+    //                 breakEnd,
+    //                 providerId: existingProvider.id,
+    //             },
+    //         });
+    //         await logActivity({
+    //             userId: req.user.id,
+    //             action: "Working Hours Added.",
+    //             entity: "workingHours",
+    //             entityId: workingHours.id,
+    //             details: { dayOfWeek, startTime, endTime, breakStart, breakEnd },
+    //             req,
+    //         })
+    //         res.status(200).json({
+    //             workingHours,
+    //             message: "Working hours created successfully",
+    //         });
+    //     } catch (error) {
+    //         console.error(error);
+    //         res.status(500).json({ error: "Error creating working hours" });
+    //     }
+    // }
+    addWorkingHours(req, res, next) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const { id, dayOfWeek, startTime, endTime, breakStart, breakEnd } = req.body;
+            // Check if the provider exists
+            const existingProvider = yield prisma.serviceProvider.findUnique({ where: { userId: req.user.id } });
+            if (!existingProvider) {
+                return res.status(404).json({ error: "Service Provider not found" });
+            }
+            try {
+                let workingHours;
+                if (id) {
+                    // Update existing working hours
+                    workingHours = yield prisma.workingHours.update({
+                        where: { id },
+                        data: {
+                            dayOfWeek,
+                            startTime,
+                            endTime,
+                            breakStart,
+                            breakEnd,
+                        },
+                    });
+                    yield (0, activityLogger_1.logActivity)({
+                        userId: req.user.id,
+                        action: "Working Hours Updated.",
+                        entity: "workingHours",
+                        entityId: workingHours.id,
+                        details: { dayOfWeek, startTime, endTime, breakStart, breakEnd },
+                        req,
+                    });
+                }
+                else {
+                    // Create new working hours
+                    workingHours = yield prisma.workingHours.create({
+                        data: {
+                            dayOfWeek,
+                            startTime,
+                            endTime,
+                            breakStart,
+                            breakEnd,
+                            providerId: existingProvider.id,
+                        },
+                    });
+                    yield (0, activityLogger_1.logActivity)({
+                        userId: req.user.id,
+                        action: "Working Hours Added.",
+                        entity: "workingHours",
+                        entityId: workingHours.id,
+                        details: { dayOfWeek, startTime, endTime, breakStart, breakEnd },
+                        req,
+                    });
+                }
+                res.status(200).json({
+                    workingHours,
+                    message: id ? "Working hours updated successfully" : "Working hours created successfully",
+                });
+            }
+            catch (error) {
+                console.error(error);
+                res.status(500).json({ error: "Error saving working hours" });
+            }
+        });
+    }
+    // get working hours
+    getWorkingHours(req, res, next) {
+        return __awaiter(this, void 0, void 0, function* () {
+            // check if provider exist
+            const existingProvider = yield prisma.serviceProvider.findUnique({ where: { userId: req.user.id } });
+            if (!existingProvider) {
+                return res.status(404).json({ error: "Service Provider not found" });
+            }
+            try {
+                const workingHours = yield prisma.workingHours.findMany({
+                    where: {
+                        providerId: existingProvider.id,
+                    },
+                });
+                res.status(200).json({
+                    workingHours,
+                    message: "Working hours retrieved successfully",
+                });
+            }
+            catch (error) {
+                console.error(error);
+                res.status(500).json({ error: "Error retrieving working hours" });
             }
         });
     }
@@ -133,6 +288,38 @@ let ServiceProviderController = class ServiceProviderController {
             catch (error) {
                 console.error(error);
                 res.status(500).json({ error: "Error creating date exclusion" });
+            }
+        });
+    }
+    // get date exclusion
+    getDateExclusions(req, res, next) {
+        return __awaiter(this, void 0, void 0, function* () {
+            // check if provider exist
+            const existingProvider = yield prisma.serviceProvider.findUnique({ where: { userId: req.user.id } });
+            if (!existingProvider) {
+                return res.status(404).json({ error: "Service Provider not found" });
+            }
+            try {
+                const dateExclusions = yield prisma.dateExclusion.findMany({
+                    where: {
+                        providerId: existingProvider.id,
+                    },
+                });
+                // get date exclusion count
+                const total_dateExclusions = yield prisma.dateExclusion.count({
+                    where: {
+                        providerId: existingProvider.id,
+                    },
+                });
+                res.status(200).json({
+                    dateExclusions,
+                    total_dateExclusions,
+                    message: "Date exclusions retrieved successfully",
+                });
+            }
+            catch (error) {
+                console.error(error);
+                res.status(500).json({ error: "Error retrieving date exclusions" });
             }
         });
     }
@@ -213,13 +400,22 @@ __decorate([
     (0, validator_1.Validate)(calendarValidator_1.serviceAreaSchema)
 ], ServiceProviderController.prototype, "uploadAddress", null);
 __decorate([
+    (0, route_1.Route)('get', '/get-service-area', (0, authMiddleware_1.checkRole)(['SERVICE_PROVIDER']))
+], ServiceProviderController.prototype, "getServiceAreas", null);
+__decorate([
     (0, route_1.Route)('post', '/add-working-hours', (0, authMiddleware_1.checkRole)(['SERVICE_PROVIDER'])),
     (0, validator_1.Validate)(calendarValidator_1.workingHoursSchema)
 ], ServiceProviderController.prototype, "addWorkingHours", null);
 __decorate([
+    (0, route_1.Route)('get', '/get-working-hours', (0, authMiddleware_1.checkRole)(['SERVICE_PROVIDER']))
+], ServiceProviderController.prototype, "getWorkingHours", null);
+__decorate([
     (0, route_1.Route)('post', '/add-date-exclusion', (0, authMiddleware_1.checkRole)(['SERVICE_PROVIDER'])),
     (0, validator_1.Validate)(calendarValidator_1.dateExclusionSchema)
 ], ServiceProviderController.prototype, "addDateExclusion", null);
+__decorate([
+    (0, route_1.Route)('get', '/get-date-exclusion', (0, authMiddleware_1.checkRole)(['SERVICE_PROVIDER']))
+], ServiceProviderController.prototype, "getDateExclusions", null);
 __decorate([
     (0, route_1.Route)('post', '/add-schedule', (0, authMiddleware_1.checkRole)(['SERVICE_PROVIDER'])),
     (0, validator_1.Validate)(calendarValidator_1.providerScheduleSchema)

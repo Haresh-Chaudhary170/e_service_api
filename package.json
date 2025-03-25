@@ -1,12 +1,15 @@
 {
-    "name": "api-mongoose",
+    "name": "yo-preety-backend-api",
     "version": "1.0.0",
     "description": "",
     "main": "src/server.ts",
     "scripts": {
         "build": "tsc",
         "test": "jest --config jest.config.ts --detectOpenHandles --coverage --maxWorkers=1",
-        "start": "ts-node --files src/server.ts"
+        "dev": "ts-node --files src/server.ts",
+        "start": "node build/server.js",
+        "postinstall": "prisma generate",
+        "seed": "ts-node prisma/seed.ts"
     },
     "keywords": [],
     "author": "Khatra Tech",
@@ -16,6 +19,7 @@
         "@types/cookie-parser": "^1.4.8",
         "@types/cors": "^2.8.17",
         "@types/express": "^5.0.0",
+        "@types/express-session": "^1.18.1",
         "@types/jest": "29.5.5",
         "@types/jsonwebtoken": "^9.0.7",
         "@types/multer": "^1.4.12",
@@ -37,6 +41,8 @@
         "cors": "^2.8.5",
         "dotenv": "^16.4.4",
         "express": "^5.0.0",
+        "express-session": "^1.18.1",
+        "googleapis": "^148.0.0",
         "joi": "^17.12.1",
         "jsonwebtoken": "^9.0.2",
         "mongoose": "^8.1.2",
