@@ -206,7 +206,17 @@ class CategoryController {
     const { id } = req.params;
 
     try {
-      const category = await prisma.category.findUnique({ where: { id } });
+      const category = await prisma.category.findUnique({ 
+        where: { id },
+        include:{
+          serviceProviders:{
+            include:{
+              user:true
+            }
+          },
+          services:true
+        }
+      });
       res.status(200).json(category);
     } catch (error) {
       console.error(error);
