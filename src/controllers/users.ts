@@ -1,0 +1,845 @@
+import { Request, Response, NextFunction } from 'express';
+import bcrypt from "bcryptjs";
+import { Controller } from '../decorators/controller';
+import { Route } from '../decorators/route';
+import { Validate } from '../decorators/validator';
+import { Prisma, PrismaClient } from "@prisma/client";
+import { checkRole } from '../middleware/authMiddleware';
+import { multipleUploadMiddleware, singleUploadMiddleware } from '../middleware/uploadMidleware';
+import { logActivity } from '../library/activityLogger';
+import { addressSchema, customerValidationSchema, providerValidationSchema, userValidationSchema } from '../validators/userValidator';
+const prisma = new PrismaClient();
+
+
+
+@Controller('/api/users')
+class UserController {
+  @Route('get', '/get-all')
+  // @Route('get', '/get-all', checkRole(['ADMIN', 'SUPERADMIN']))
+  async getUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const users = await prisma.user.findMany();
+      res.status(200).json(users);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error fetching users" });
+    }
+  }
+
+  @Route('post', '/register')
+  @Validate(userValidationSchema) // Validation on the request body
+  async registerUser(req: Request, res: Response, next: NextFunction) {
+    const { firstName, lastName, role, email, phone, password } = req.body;
+    try {
+      // Check if the email already exists
+      const existingUser = await prisma.user.findUnique({ where: { email } });
+      if (existingUser) {
+        return res.status(400).json({ error: "Email already exists" });
+      }
+
+      // Check if the phone number already exists
+      const existingUserByPhone = await prisma.user.findUnique({ where: { phone } });
+      if (existingUserByPhone) {
+        return res.status(400).json({ error: "Phone number already exists" });
+      }
+
+      // Hash the password before saving it
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Create the user in the database
+      const user = await prisma.user.create({
+        data: { firstName, lastName, role, email, phone, password: hashedPassword },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          email: true,
+          phone: true,
+        }
+      });
+      await logActivity({
+        userId: user.id,
+        action: `User Registered as ${role}`,
+        entity: 'User',
+        entityId: user.id,
+        details: { email },
+        req,
+      });
+      res.status(201).json({
+        user,
+        message: "User created successfully",
+      });
+    } catch (error) {
+      console.error(error);  // Log the error for debugging
+      res.status(500).json({ error: "Error creating user" });
+    }
+  }
+
+  // insert to customer table if the registered user role is CUSTOMER
+  @Route('post', '/register-customer')
+  @Validate(customerValidationSchema) // Validation on the request body
+  async registerCustomer(req: Request, res: Response, next: NextFunction) {
+    const { userId, emergencyContact } = req.body;
+    // check if user exist]
+    const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    // check if user role is CUSTOMER
+    if (existingUser.role !== 'CUSTOMER') {
+      return res.status(403).json({ error: "You are not authorized to register as customer" });
+    }
+
+    // check if userId already exist in customer table
+    const existingCustomer = await prisma.customer.findUnique({ where: { userId } });
+    if (existingCustomer) {
+      return res.status(400).json({ error: "You have already been registered as customer" });
+    }
+
+    try {
+      // Create the customer in the database
+      const customer = await prisma.customer.create({
+        data: { userId, emergencyContact },
+      });
+
+      await logActivity({
+        userId: customer.userId,
+        action: `User Registered as Customer`,
+        entity: 'Customer',
+        entityId: customer.id,
+        details: { emergencyContact },
+        req,
+      })
+
+      res.status(200).json({
+        customer,
+        message: "Customer created successfully",
+      });
+    } catch (error) {
+      console.error(error);  // Log the error for debugging
+      res.status(500).json({ error: "Error creating customer" });
+    }
+  }
+
+  @Route('post', '/register-user-type')
+  @Validate(customerValidationSchema) // Validation on the request body
+  async registerUserType(req: Request, res: Response, next: NextFunction) {
+    const { userId, userType } = req.body;
+    // check if user exist]
+    const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+
+    try {
+      // Create the customer in the database
+      const customer = await prisma.user.update({
+        where: { id: userId },
+        data: { role: userType },
+      });
+
+      await logActivity({
+        userId: customer.id,
+        action: `User Registered as ` + userType,
+        entity: 'Customer',
+        entityId: customer.id,
+        details: { customer },
+        req,
+      })
+
+      res.status(200).json({
+        customer,
+        message: "Customer created successfully",
+      });
+    } catch (error) {
+      console.error(error);  // Log the error for debugging
+      res.status(500).json({ error: "Error creating customer" });
+    }
+  }
+
+  // insert to provider table if the registered user role is SERVICE_PROVIDER
+  @Route('post', '/register-provider')
+  @Validate(providerValidationSchema) // Validation on the request body
+  async registerProvider(req: Request, res: Response, next: NextFunction) {
+    const { userId, bio, experience, businessName, categoryId } = req.body;
+    // check if user exist]
+    const existingUser = await prisma.user.findUnique({ where: { id: userId } });
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    // check if user role is SERVICE_PROVIDER
+    if (existingUser.role !== 'SERVICE_PROVIDER') {
+      return res.status(403).json({ error: "You are not authorized to register as service provider" });
+    }
+
+    // check if userId already exist in provider table
+    const existingProvider = await prisma.serviceProvider.findUnique({ where: { userId } });
+    if (existingProvider) {
+      return res.status(400).json({ error: "You have already been registered as service provider" });
+    }
+
+    try {
+      // Create the provider in the database
+      const provider = await prisma.serviceProvider.create({
+        data: { userId, bio, experience, businessName, categoryId },
+      });
+
+      await logActivity({
+        userId: provider.userId,
+        action: `User Registered as Service Provider`,
+        entity: 'ServiceProvider',
+        entityId: provider.id,
+        details: { businessName },
+        req,
+      })
+      res.status(200).json({
+        provider,
+        message: "Service provider created successfully",
+      });
+
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error creating service provider" });
+    }
+  }
+
+  @Route('post', '/upload-kyc-certifications', multipleUploadMiddleware)
+  async uploadKycAndCertifications(req: Request, res: Response, next: NextFunction) {
+    const { providerId, type, name, certifications } = req.body;
+    const files = req.files as Express.Multer.File[];
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'At least one image is required' });
+    }
+
+    // Check if providerId exists in the provider table
+    const existingProvider = await prisma.serviceProvider.findUnique({
+      where: { id: providerId },
+    });
+
+    if (!existingProvider) {
+      return res.status(404).json({ error: 'Service provider not found' });
+    }
+
+    try {
+      // Process KYC Document (First File)
+      const kycDocument = await prisma.document.create({
+        data: {
+          providerId,
+          type,
+          name,
+          url: `${files[0].destination}/${files[0].filename}`,
+        },
+      });
+
+      await logActivity({
+        userId: existingProvider.userId,
+        action: `Uploaded KYC Document - ${name}`,
+        entity: 'Document',
+        entityId: kycDocument.id,
+        details: { type, name },
+        req,
+      });
+
+      // Process Certifications (Remaining Files)
+      const certificationDocs = [];
+      if (certifications && Array.isArray(certifications)) {
+        for (let i = 0; i < certifications.length; i++) {
+          const cert = certifications[i];
+          const file = files[i + 1]; // Skip the first file since it's for KYC
+
+          if (!file) continue;
+
+          const certDoc = await prisma.certification.create({
+            data: {
+              providerId,
+              title: cert.title,
+              issuingOrganization: cert.issuingOrganization,
+              url: `${file.destination}/${file.filename}`,
+            },
+          });
+
+          certificationDocs.push(certDoc);
+        }
+      }
+
+      res.status(200).json({
+        kycDocument,
+        certifications: certificationDocs,
+        message: 'KYC and Certifications uploaded successfully',
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Error uploading KYC and certifications' });
+    }
+  }
+
+
+  @Route('post', '/add-address', checkRole(["CUSTOMER", "SERVICE_PROVIDER"]))
+  @Validate(addressSchema)
+  async uploadAddress(req: Request, res: Response, next: NextFunction) {
+    const { name, phone, street, area, city, state, landmark, location, metadata } = req.body;
+
+
+    // location = "12.3456,78.9012"
+
+    // Parse lat/lng
+    let lat = null;
+    let lng = null;
+    if (location) {
+      [lat, lng] = location.split(',').map(Number);
+    }
+    // Check if the location is valid
+    if (!lat || !lng) {
+      return res.status(400).json({ error: 'Invalid location format. Use "lat,lng"' });
+    }
+    const locationObj = { lat, lng };
+    // Check if the user exists
+    const existingUser = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    try {
+      // Check if an address already exists for the user
+      const existingAddress = await prisma.address.findFirst({
+        where: { userId: req.user.id },
+      });
+
+      let address;
+      if (existingAddress) {
+        // Update the existing address
+        address = await prisma.address.update({
+          where: { id: existingAddress.id },
+          data: { name, phone, street, area, city, state, landmark, location: locationObj, metadata },
+        });
+      } else {
+        // Create a new address
+        address = await prisma.address.create({
+          data: { userId: req.user.id, type: "HOME", name, phone, street, area, city, state, landmark, location: locationObj, metadata },
+        });
+      }
+
+      // Log the activity
+      await logActivity({
+        userId: existingUser.id,
+        action: existingAddress ? `Updated Address - ${name}` : `Added Address - ${name}`,
+        entity: 'Address',
+        entityId: address.id,
+        details: address,
+        req,
+      });
+
+      res.status(200).json({
+        address,
+        message: existingAddress ? "Address updated successfully" : "Address created successfully",
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error processing address" });
+    }
+  }
+
+  // get address
+  @Route('get', '/get-address', checkRole(["CUSTOMER", "SERVICE_PROVIDER"]))
+  async getAddress(req: Request, res: Response, next: NextFunction) {
+
+    // Check if the user exists
+    const existingUser = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    try {
+      // Check if an address already exists for the user
+      const address = await prisma.address.findFirst({
+        where: { userId: req.user.id },
+      });
+
+      // stringify the location object
+      if (address && address.location && typeof address.location === 'object') {
+        const loc = address.location as { lat: number; lng: number };
+        address.location = `${loc.lat},${loc.lng}`;
+      }
+
+      res.status(200).json({
+        address,
+        message: "Address fetched successfully",
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error processing address" });
+    }
+  }
+
+  // get address
+  @Route('get', '/get-address/:id', checkRole(["CUSTOMER", "SERVICE_PROVIDER"]))
+  async getProviderAddress(req: Request, res: Response, next: NextFunction) {
+
+    // Check if the user exists
+    const existingUser = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    try {
+      // Check if an address already exists for the user
+      const address = await prisma.address.findFirst({
+        where: { userId: req.params.id },
+      });
+      // stringify the location object
+      if (address && address.location && typeof address.location === 'object') {
+        const loc = address.location as { lat: number; lng: number };
+        address.location = `${loc.lat},${loc.lng}`;
+      }
+
+      res.status(200).json({
+        address,
+        message: "Address fetched successfully",
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error processing address" });
+    }
+  }
+
+
+  // get user by id
+  @Route('get', '/me', checkRole(['CUSTOMER', 'SERVICE_PROVIDER']))
+  async getUserById(req: Request, res: Response, next: NextFunction) {
+    const { id } = req.user;
+    try {
+      const user = await prisma.user.findUnique({ where: { id } });
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.status(200).json(user); // Return the user object
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error fetching user" });
+    }
+  }
+
+  // get user by id
+  @Route('get', '/id/:id')
+  async getUserId(req: Request, res: Response, next: NextFunction) {
+    const { id } = req.params;
+    try {
+      const user = await prisma.user.findUnique({ where: { id } });
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.status(200).json(user); // Return the user object
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error fetching user" });
+    }
+  }
+  // update user
+  @Route('put', '/update', checkRole(['CUSTOMER', 'SERVICE_PROVIDER']))
+  async updateUser(req: Request, res: Response, next: NextFunction) {
+    const { id } = req.user;
+    const { firstName, lastName, email, phone } = req.body;
+    try {
+      // Check if the user exists
+      const existingUser = await prisma.user.findUnique({ where: { id } });
+      if (!existingUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      // Update the user in the database
+      const user = await prisma.user.update({
+        where: { id },
+        data: { firstName, lastName, email, phone },
+      });
+
+      await logActivity({
+        userId: user.id,
+        action: "User Updated",
+        entity: "User",
+        entityId: user.id,
+        details: { email },
+        req,
+      })
+
+      res.status(200).json(user);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error updating user" });
+    }
+  }
+
+  // update user avatar
+  @Route('put', '/update-avatar', checkRole(['CUSTOMER', 'SERVICE_PROVIDER']), singleUploadMiddleware)
+  async updateAvatar(req: Request, res: Response, next: NextFunction) {
+    const { id } = req.user;
+    const file = req.file as Express.Multer.File;
+    try {
+      // Check if the user exists
+      const existingUser = await prisma.user.findUnique({ where: { id } });
+      if (!existingUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      // Update the user in the database
+      const user = await prisma.user.update({
+        where: { id },
+        data: { avatar: `${file.destination}/${file.filename}` },
+      });
+      res.status(200).json(user);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error updating user avatar" });
+    }
+  }
+
+  // get all providers
+  @Route('get', '/get-all-providers')
+  async getAllProviderrs(req: Request, res: Response, next: NextFunction) {
+    try {
+      const providers = await prisma.serviceProvider.findMany(
+        {
+          include: {
+            user: {
+              include: {
+                address: true
+              }
+            },
+            category: true,
+            serviceAreas: true,
+            services: true,
+            schedules: true,
+            workingHours: true,
+            unavailableDates: true,
+
+          },
+          orderBy: {
+            user: {
+              createdAt: 'desc', // Correct ordering for user.createdAt
+            },
+          },
+        }
+      );
+      res.status(200).json(providers);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error fetching providers" });
+    }
+  }
+
+  // @Route('get', '/providers')
+  // async getProvidersByCategory(req: Request, res: Response) {
+  //   try {
+  //     const {
+  //       search,
+  //       location, //ths is cordinates. eg: 12.3456, 78.9012
+  //       // minPrice,
+  //       // maxPrice,
+  //       category,
+  //       sort,
+  //       // type, // BUSINESS or INDIVIDUAL
+  //       // page = 1,
+  //       // limit = 10
+  //     } = req.query;
+
+  //     console.log(category)
+  //     // Build the where clause
+  //     const where: any = {
+  //       categoryId: category,
+  //       kycStatus: 'PENDING', // Only show verified providers
+  //     };
+
+  //     // Apply filters
+  //     if (search) {
+  //       where.OR = [
+  //         { businessName: { contains: search, mode: 'insensitive' } },
+  //         { user: { firstName: { contains: search, mode: 'insensitive' } } },
+  //         { user: { lastName: { contains: search, mode: 'insensitive' } } },
+  //       ];
+  //     }
+
+  //     // if (location) {
+  //     //   where.serviceAreas = {
+  //     //     some: {
+  //     //       name: { contains: location, mode: 'insensitive' }
+  //     //     }
+  //     //   };
+  //     // }
+
+
+  //     // Sorting
+  //     let orderBy: any = {};
+  //     switch (sort) {
+  //       case 'top-rated':
+  //         orderBy = { averageRating: 'desc' };
+  //         break;
+  //       case 'price-low-high':
+  //         orderBy = { services: { price: 'asc' } };
+  //         break;
+  //       case 'price-high-low':
+  //         orderBy = { services: { price: 'desc' } };
+  //         break;
+  //       default: // 'nearest'
+  //         //   // Would need geolocation data for proper implementation
+  //         orderBy = { user: { createdAt: 'desc' } }
+  //     }
+
+  //     // Get paginated results
+  //     const [providers, total] = await prisma.$transaction([
+  //       prisma.serviceProvider.findMany({
+  //         where,
+  //         include: {
+  //           user: {
+  //             include: {
+  //               address: true
+  //             }
+  //           },
+  //           services: true,
+  //           category: true
+  //         },
+  //         orderBy,
+  //         // skip: (Number(page) - 1) * Number(limit),
+  //         // take: Number(limit),
+  //       }),
+  //       prisma.serviceProvider.count({ where })
+  //     ]);
+
+  //     res.json({
+  //       providers,
+  //       total,
+  //       // page: Number(page),
+  //       // limit: Number(limit),
+  //       // totalPages: Math.ceil(total / Number(limit))
+  //     });
+  //   } catch (error) {
+  //     console.error(error);
+  //     res.status(500).json({ error: 'Error fetching providers' });
+  //   }
+  // }
+
+
+  @Route('get', '/providers')
+  async getProvidersByCategory(req: Request, res: Response) {
+    try {
+      const {
+        search,
+        latitude,
+        longitude,
+        category,
+        sort,
+      } = req.query;
+      //join the latitude and longitude to form a location string
+      const location = latitude && longitude ? `${latitude},${longitude}` : null;
+      console.log(location)
+      // Parse lat/lng
+      let lat = null;
+      let lng = null;
+      if (location) {
+        [lat, lng] = (location as string).split(',').map(Number);
+      }
+
+      const radiusInKm = 10;
+
+      // Build ORDER BY clause
+      let orderClause = '';
+      switch (sort) {
+        case 'top-rated':
+          orderClause = `ORDER BY sp."averageRating" DESC`;
+          break;
+        case 'price-low-high':
+          orderClause = `ORDER BY (SELECT MIN(s."price") FROM "Service" s WHERE s."providerId" = sp.id) ASC`;
+          break;
+        case 'price-high-low':
+          orderClause = `ORDER BY (SELECT MAX(s."price") FROM "Service" s WHERE s."providerId" = sp.id) DESC`;
+          break;
+        default:
+          orderClause = `ORDER BY u."createdAt" DESC`;
+      }
+
+      const rawQuery = Prisma.sql`
+      SELECT
+        sp.*,
+        u."firstName", u."lastName", u."createdAt",
+        a.id AS "addressId", a.location,
+        c.name AS "categoryName",
+        (
+          6371 * acos(
+            cos(radians(${lat}))
+            * cos(radians(CAST(a.location->>'lat' AS FLOAT)))
+            * cos(radians(CAST(a.location->>'lng' AS FLOAT)) - radians(${lng}))
+            + sin(radians(${lat}))
+            * sin(radians(CAST(a.location->>'lat' AS FLOAT)))
+          )
+        ) AS distance_km
+      FROM "ServiceProvider" sp
+      JOIN "User" u ON u.id = sp."userId"
+      JOIN "Address" a ON a."userId" = u.id
+      JOIN "Category" c ON c.id = sp."categoryId"
+      WHERE sp."kycStatus" = 'PENDING'
+        AND (${!category} OR sp."categoryId" = ${category})
+        ${search ? Prisma.sql`
+          AND (
+            sp."businessName" ILIKE ${'%' + search + '%'}
+            OR u."firstName" ILIKE ${'%' + search + '%'}
+            OR u."lastName" ILIKE ${'%' + search + '%'}
+          )
+        ` : Prisma.empty}
+        ${location ? Prisma.sql`
+          AND (
+            6371 * acos(
+              cos(radians(${lat}))
+              * cos(radians(CAST(a.location->>'lat' AS FLOAT)))
+              * cos(radians(CAST(a.location->>'lng' AS FLOAT)) - radians(${lng}))
+              + sin(radians(${lat}))
+              * sin(radians(CAST(a.location->>'lat' AS FLOAT)))
+            )
+          ) <= ${radiusInKm}
+        ` : Prisma.empty}
+      ${Prisma.raw(orderClause)}
+    `;
+
+      const providers = await prisma.$queryRaw<any[]>(rawQuery);
+
+      console.log(providers)
+      res.json({
+        providers,
+        total: providers.length,
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Error fetching providers' });
+    }
+  }
+
+  // GET PROVIDER BY ID
+  @Route('get', '/get-provider/:id')
+  async getProvider(req: Request, res: Response, next: NextFunction) {
+    const { id } = req.params;
+    try {
+      const provider = await prisma.serviceProvider.findUnique({
+        where: { id: id },
+        include: {
+          user: {
+            include: {
+              address: true
+            }
+          },
+          category: true,
+          serviceAreas: true,
+          services: true,
+          schedules: true,
+          workingHours: true,
+          unavailableDates: true,
+        },
+      });
+      if (!provider) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+      res.status(200).json(provider);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error fetching provider" });
+    }
+  }
+
+
+  @Route('get', '/get-providerss')
+  async getProviderss(req: Request, res: Response, next: NextFunction) {
+    try {
+      const provider = await prisma.serviceProvider.findMany({
+        include: {
+          user: {
+            include: {
+              address: true
+            }
+          },
+          category: true,
+          serviceAreas: true,
+          services: true,
+          schedules: true,
+          workingHours: true,
+          unavailableDates: true,
+        },
+      });
+      if (!provider) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+      res.status(200).json(provider);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error fetching provider" });
+    }
+  }
+
+  // get provider by id
+  @Route('get', '/get-provider-details', checkRole(['SERVICE_PROVIDER', 'CUSTOMER']))
+  async getProviderById(req: Request, res: Response, next: NextFunction) {
+    const { id } = req.user;
+    try {
+      const provider = await prisma.serviceProvider.findFirst({ where: { userId: id } });
+      if (!provider) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+      res.status(200).json(provider); // Return the provider object
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error fetching provider" });
+    }
+  }
+
+  // update provider
+  @Route('put', '/update-provider', checkRole(['SERVICE_PROVIDER']))
+  async updateProvider(req: Request, res: Response, next: NextFunction) {
+    const { id } = req.user;
+    const { bio, experience, businessName, categoryId } = req.body;
+    try {
+      // Check if the provider exists
+      const existingProvider = await prisma.serviceProvider.findFirst({ where: { userId: id } });
+      if (!existingProvider) {
+        return res.status(404).json({ error: "Provider not found" });
+      }
+      // Update the provider in the database
+      const provider = await prisma.serviceProvider.update({
+        where: { id: existingProvider.id },
+        data: { bio, experience, businessName, categoryId },
+      });
+      res.status(200).json(provider);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error updating provider" });
+    }
+  }
+
+  // delete user
+  @Route('delete', '/delete/:id', checkRole(['ADMIN', 'SUPERADMIN']))
+  async deleteUser(req: Request, res: Response, next: NextFunction) {
+    const { id } = req.params;
+    try {
+      // Check if the user exists
+      const existingUser = await prisma.user.findUnique({ where: { id } });
+      if (!existingUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Delete the user from the database
+      await prisma.user.delete({ where: { id } });
+
+      await logActivity({
+        userId: req.user.id,
+        action: "User Deleted",
+        entity: "User",
+        entityId: id,
+        details: { email: existingUser.email },
+        req,
+      })
+
+      res.status(200).json({ message: "User deleted successfully" });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Error deleting user" });
+    }
+  }
+}
+
+
+export default UserController;
